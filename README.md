@@ -55,3 +55,9 @@ pipenv install
 
 > При установке зависимостей используется подключение с помощью SSH. Подробнее о нём вы можете прочитать в
 > руководстве ["Connecting to GitHub with SSH"](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
+
+## Использование
+
+```shell
+pipenv run python main.py
+```
