@@ -1,20 +1,19 @@
 import asyncio
-import logging
+import logging.config
 from configparser import ConfigParser
-from src.gates import OKXGate
+from gate import OKXGate
 
+LOGGING_CONFIG_FNAME: str = "logging.conf"
 CONFIG_FILENAME: str = "config.ini"
 
 
 async def main():
-    # Включение логирования
-    logging.basicConfig(level=logging.INFO)
+    # Инициализация логирования
+    logging.config.fileConfig(LOGGING_CONFIG_FNAME)
 
-    # Чтение конфигурации
-    logging.info("Reading configuration...")
+    # Чтение конфигурации гейта
     config = ConfigParser()
     config.read(CONFIG_FILENAME)
-    logging.info("Configuration successfully read!", {"config": config})
 
     # Запуск гейта
     async with OKXGate(config) as gate:

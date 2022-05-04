@@ -4,10 +4,10 @@ from aeron import Subscriber, Publisher
 from ccxtpro import okx
 import asyncio
 
-AeronHandler = Callable[[str], None]
+AeronMessageHandler = Callable[[str], None]
 
 
-def subscription(handler: AeronHandler, config: SectionProxy) -> Subscriber:
+def subscription(handler: AeronMessageHandler, config: SectionProxy) -> Subscriber:
     return Subscriber(
         handler,
         config.get("channel", "aeron:udp?control-mode=manual"),
