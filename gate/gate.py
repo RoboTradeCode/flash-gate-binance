@@ -8,20 +8,23 @@ class OKXGate:
     def __init__(self, config: ConfigParser):
         self.config = config
 
-        logging.info("Creating sub for config, Cfg: %s", {**config["config"]})
-        self.config_sub = subscription(self.config_handler, config["config"])
+        logging.info("Creating sub for config: %s", {**config["config_sub"]})
+        self.config_sub = subscription(self.config_handler, config["config_sub"])
 
-        logging.info("Creating sub for commands, Cfg: %s", {**config["commands"]})
-        self.commands_sub = subscription(self.commands_handler, config["commands"])
+        logging.info("Creating pub for config: %s", {**config["config_pub"]})
+        self.config_pub = publication(config["config_pub"])
 
-        logging.info("Creating pub for orderbooks, Cfg: %s", {**config["orderbooks"]})
-        self.orderbooks_pub = publication(config["orderbooks"])
+        logging.info("Creating sub for commands: %s", {**config["commands_sub"]})
+        self.commands_sub = subscription(self.commands_handler, config["commands_sub"])
 
-        logging.info("Creating pub for balance, Cfg: %s", {**config["balance"]})
-        self.balance_pub = publication(config["balance"])
+        logging.info("Creating pub for orderbooks: %s", {**config["orderbooks_pub"]})
+        self.orderbooks_pub = publication(config["orderbooks_pub"])
 
-        logging.info("Creating pub for orders, Cfg: %s", {**config["orders"]})
-        self.orders_pub = publication(config["orders"])
+        logging.info("Creating pub for balance: %s", {**config["balance_pub"]})
+        self.balance_pub = publication(config["balance_pub"])
+
+        logging.info("Creating pub for orders: %s", {**config["orders_pub"]})
+        self.orders_pub = publication(config["orders_pub"])
 
         logging.info("Instantiating okx exchange, Cfg: %s", {**config["exchange"]})
         self.exchange = exchange(config["exchange"])
@@ -39,8 +42,9 @@ class OKXGate:
 
         :param message: Конфигурация от агента
         """
-        logging.debug("Handle config, Cfg: %s", message)
-        self.config.read_string(message)
+        logging.debug("Handle config: %s", message)
+        # TODO: Загрузить валидную конфигурацию в конфигуратор
+        # self.config.read_string(message)
 
     def commands_handler(self, message: str) -> None:
         """
@@ -67,5 +71,5 @@ class OKXGate:
             }
             orderbook = await self.exchange.watch_order_book(**kwargs)
 
-            logging.debug("Sending orderbook to core, Orderbook: %s", orderbook)
+            logging.debug("Sending orderbook to core: %s", orderbook)
             self.orderbooks_pub.offer(str(orderbook))
