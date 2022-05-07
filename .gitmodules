@@ -1,6 +1,6 @@
-[submodule "agent"]
-	path = agent
-	url = git@github.com:RoboTradeCode/agent.git
 [submodule "core_3t_php"]
 	path = core_3t_php
 	url = git@github.com:RoboTradeCode/core_3t_php.git
+[submodule "configurator"]
+	path = configurator
+	url = git@github.com:RoboTradeCode/configurator.git
