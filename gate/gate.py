@@ -2,12 +2,13 @@
 Реализация торгового гейта
 """
 import asyncio
+import json
 import logging
 from configparser import ConfigParser
+from typing import Optional
 from .configurator import Configurator
 from .core import Core
 from .exchange import instantiate_exchange
-import json
 
 
 class Gate:
@@ -41,17 +42,20 @@ class Gate:
         """
         command = json.loads(message)
 
-        match command:
-            case {"action": "create_order"}:
+        match command.get("action"):
+            case "create_order":
                 self.create_orders(command["data"])
-            case {"action": "cancel_order"}:
+            case "cancel_order":
                 self.cancel_orders(command["data"])
+            case "get_balances":
+                self.fetch_balance(command.get("data", {}).get("assets"))
             case _:
                 logging.warning("Unknown command: %s", command)
 
     def create_orders(self, orders: list[dict]) -> None:
         """
         Создать ордера
+
         :param orders: Ордера
         """
         tasks = [self.exchange.create_order(**order) for order in orders]
@@ -60,10 +64,29 @@ class Gate:
     def cancel_orders(self, orders: list[dict]) -> None:
         """
         Отменить ордера
+
         :param orders:
         """
         tasks = [self.exchange.cancel_order(**order) for order in orders]
         asyncio.gather(*tasks)
+
+    def fetch_balance(self, parts: Optional[list[str]] = None) -> None:
+        """
+        Получить баланс по активам
+
+        :param parts: Активы
+        """
+        try:
+            balance = await self.exchange.fetch_balance()
+
+            if parts is not None:
+                partial_balance = {part: balance[part] for part in parts}
+                self.core.offer_balance(partial_balance)
+
+            self.core.offer_balance(balance)
+
+        except Exception as e:
+            logging.exception(e)
 
     async def poll(self) -> None:
         """
@@ -84,6 +107,8 @@ class Gate:
     async def watch_order_book(self, symbol) -> None:
         """
         Получать биржевой стакан и отправлять его торговому ядру
+
+        :param symbol: Актив
         """
         limit = self.config.getint("watch_order_book", "limit", fallback=None)
 
