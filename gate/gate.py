@@ -39,17 +39,17 @@ class Gate:
 
         :param message: Сообщение от ядра
         """
-        message = json.loads(message)
+        command = json.loads(message)
 
-        match message:
+        match command:
             case {"action": "create_order"}:
-                self.creating_orders(message["data"])
+                self.create_orders(command["data"])
             case {"action": "cancel_order"}:
-                self.cancel_orders(message["data"])
+                self.cancel_orders(command["data"])
             case _:
-                logging.warning("Unknown message type: %s", message)
+                logging.warning("Unknown command: %s", command)
 
-    def creating_orders(self, orders: list[dict]) -> None:
+    def create_orders(self, orders: list[dict]) -> None:
         """
         Создать ордера
         :param orders: Ордера
