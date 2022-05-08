@@ -49,6 +49,10 @@ class Gate:
                 self.cancel_orders(command["data"])
             case "get_balances":
                 self.fetch_balance(command.get("data", {}).get("assets"))
+            case "cancel_all_orders":
+                self.cancel_orders()
+            case "order_status":
+                self.order_status(**command.get("data", {}))
             case _:
                 logging.warning("Unknown command: %s", command)
 
@@ -61,12 +65,15 @@ class Gate:
         tasks = [self.exchange.create_order(**order) for order in orders]
         asyncio.gather(*tasks)
 
-    def cancel_orders(self, orders: list[dict]) -> None:
+    def cancel_orders(self, orders: Optional[list[dict]] = None) -> None:
         """
         Отменить ордера
 
         :param orders:
         """
+        if orders is None:
+            orders = self.exchange.fetch_orders()
+
         tasks = [self.exchange.cancel_order(**order) for order in orders]
         asyncio.gather(*tasks)
 
@@ -87,6 +94,13 @@ class Gate:
 
         except Exception as e:
             logging.exception(e)
+
+    def order_status(self, **kwargs) -> None:
+        """
+        Проверить статус ордера
+        """
+        order_status = await self.exchange.fetch_order_status(**kwargs)
+        # TODO: send to core
 
     async def poll(self) -> None:
         """
