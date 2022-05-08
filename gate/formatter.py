@@ -16,6 +16,12 @@ class Formatter:
         self.config = config
 
     def format_order_book(self, order_book):
+        """
+        Привести биржевой стакан к общему формату обмена данными
+
+        :param order_book: Биржевой стакан
+        :return: Отформатированное сообщение
+        """
         return json.dumps(
             {
                 "event": "data",
@@ -31,6 +37,12 @@ class Formatter:
         )
 
     def format_balance(self, balance):
+        """
+        Привести баланс к общему формату обмена данными
+
+        :param balance: Баланс
+        :return: Отформатированное сообщение
+        """
         return json.dumps(
             {
                 "event": "data",
@@ -46,6 +58,12 @@ class Formatter:
         )
 
     def format_orders(self, orders):
+        """
+        Привести ордера к общему формату обмена данными
+
+        :param orders: Баланс
+        :return: Отформатированное сообщение
+        """
         return json.dumps(
             {
                 "event": "data",
