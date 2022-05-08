@@ -33,13 +33,37 @@ class Gate:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.exchange.close()
 
-    def handle_command(self, command: str) -> None:
+    def handle_command(self, message: str) -> None:
         """
         Функция обратного вызова для приёма команд от ядра
 
-        :param command: Команда от ядра
+        :param message: Сообщение от ядра
         """
-        logging.debug("Handle command: %s", command)
+        message = json.loads(message)
+
+        match message:
+            case {"action": "create_order"}:
+                self.creating_orders(message["data"])
+            case {"action": "cancel_order"}:
+                self.cancel_orders(message["data"])
+            case _:
+                logging.warning("Unknown message type: %s", message)
+
+    def creating_orders(self, orders: list[dict]) -> None:
+        """
+        Создать ордера
+        :param orders: Ордера
+        """
+        tasks = [self.exchange.create_order(**order) for order in orders]
+        asyncio.gather(*tasks)
+
+    def cancel_orders(self, orders: list[dict]) -> None:
+        """
+        Отменить ордера
+        :param orders:
+        """
+        tasks = [self.exchange.cancel_order(**order) for order in orders]
+        asyncio.gather(*tasks)
 
     async def poll(self) -> None:
         """
@@ -68,7 +92,7 @@ class Gate:
         while True:
             try:
                 orderbook = await self.exchange.watch_order_book(symbol, limit)
-                self.core.order_book.offer(str(orderbook))
+                self.core.offer_order_book(orderbook)
             except Exception as e:
                 logging.exception(e)
 
@@ -81,7 +105,7 @@ class Gate:
         while True:
             try:
                 balance = await self.exchange.watch_balance()
-                self.core.balance.offer(str(balance))
+                self.core.offer_balance(balance)
             except Exception as e:
                 logging.exception(e)
 
@@ -98,6 +122,6 @@ class Gate:
         while True:
             try:
                 orders = await self.exchange.watch_orders(symbol, since, limit)
-                self.core.orders.offer(str(orders))
+                self.core.offer_orders(orders)
             except Exception as e:
                 logging.exception(e)

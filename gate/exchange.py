@@ -24,8 +24,14 @@ def instantiate_exchange(config: ConfigParser) -> Exchange:
     exchange_class = getattr(ccxtpro, exchange_id)
     exchange_config = {**config["exchange"], "asyncio_loop": get_running_loop()}
 
-    # Создание экземпляра класса биржы и проверка обязательных учётных данных
-    exchange = exchange_class(exchange_config)
+    # Создание экземпляра класса биржы
+    exchange: Exchange = exchange_class(exchange_config)
+
+    # Проверка тестового режима
+    sandbox_mode = config.getboolean("gate", "sandbox_mode")
+    exchange.set_sandbox_mode(sandbox_mode)
+
+    # Проверка обязательных учётных данных
     check_credentials(exchange)
     logging.info("Exchange instantiation has been successful")
 
