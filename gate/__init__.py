@@ -1,3 +1,3 @@
-from .gate import OKXGate
+from .gate import Gate
 
-__all__ = [OKXGate]
+__all__ = [Gate]

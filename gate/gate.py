@@ -1,34 +1,31 @@
+"""
+Реализация торгового гейта
+"""
 import asyncio
 import logging
 from configparser import ConfigParser
-from .helpers import subscription, publication, exchange
+from .configurator import Configurator
+from .core import Core
+from .exchange import instantiate_exchange
+import json
 
 
-class OKXGate:
+class Gate:
+    """
+    Торговый гейт. Подключается к бирже и посылает торговому ядру информацию о биржевых
+    стаканах, балансе и ордерах. Выполняет поступающие от торгового ядра команды
+    """
+
     def __init__(self, config: ConfigParser):
-        self.config = config
+        # Получение актуальной конфигурации
+        configurator = Configurator(config)
+        self.config = configurator.get_configuration()
 
-        logging.info("Creating sub for config: %s", {**config["config_sub"]})
-        self.config_sub = subscription(self.config_handler, config["config_sub"])
+        # Создание экземпляра класса биржы для подключения и начала торговли
+        self.exchange = instantiate_exchange(config)
 
-        logging.info("Creating pub for config: %s", {**config["config_pub"]})
-        self.config_pub = publication(config["config_pub"])
-
-        logging.info("Creating sub for commands: %s", {**config["commands_sub"]})
-        self.commands_sub = subscription(self.commands_handler, config["commands_sub"])
-
-        logging.info("Creating pub for orderbooks: %s", {**config["orderbooks_pub"]})
-        self.orderbooks_pub = publication(config["orderbooks_pub"])
-
-        logging.info("Creating pub for balance: %s", {**config["balance_pub"]})
-        self.balance_pub = publication(config["balance_pub"])
-
-        logging.info("Creating pub for orders: %s", {**config["orders_pub"]})
-        self.orders_pub = publication(config["orders_pub"])
-
-        logging.info("Instantiating okx exchange, Cfg: %s", {**config["exchange"]})
-        self.exchange = exchange(config["exchange"])
-        self.exchange.check_required_credentials()
+        # Создание каналов Aeron для ядра
+        self.core = Core(config, self.handle_command)
 
     async def __aenter__(self):
         return self
@@ -36,40 +33,71 @@ class OKXGate:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.exchange.close()
 
-    def config_handler(self, message: str) -> None:
-        """
-        Функция обратного вызова для приёма конфигурации от агента
-
-        :param message: Конфигурация от агента
-        """
-        logging.debug("Handle config: %s", message)
-        # TODO: Загрузить валидную конфигурацию в конфигуратор
-        # self.config.read_string(message)
-
-    def commands_handler(self, message: str) -> None:
+    def handle_command(self, command: str) -> None:
         """
         Функция обратного вызова для приёма команд от ядра
 
-        :param message: Команда от ядра
+        :param command: Команда от ядра
         """
-        logging.debug("Handle command, Cmd: %s", message)
+        logging.debug("Handle command: %s", command)
 
-    async def aeron_poll(self) -> None:
+    async def poll(self) -> None:
+        """
+        Проверять наличие новых сообщений от торгового ядра
+        """
         while True:
-            self.config_sub.poll()
-            self.commands_sub.poll()
-            await asyncio.sleep(0)
+            self.core.poll()
+            await asyncio.sleep(0.1)
 
-    async def watch_order_book(self) -> None:
+    async def watch_order_books(self) -> None:
+        """
+        Получать биржевые стаканы и отправлять их торговому ядру
+        """
+        symbols = json.loads(self.config.get("gate", "symbols"))
+        tasks = [self.watch_order_book(symbol) for symbol in symbols]
+        await asyncio.gather(*tasks)
+
+    async def watch_order_book(self, symbol) -> None:
+        """
+        Получать биржевой стакан и отправлять его торговому ядру
+        """
+        limit = self.config.getint("watch_order_book", "limit", fallback=None)
+
+        logging.info("Watching order book: %s", symbol)
+
         while True:
-            kwargs = {
-                "symbol": self.config.get("watch_order_book", "symbol"),
-                "limit": self.config.getint("watch_order_book", "limit"),
-                "params": {
-                    "depth": self.config.get("watch_order_book", "depth"),
-                },
-            }
-            orderbook = await self.exchange.watch_order_book(**kwargs)
+            try:
+                orderbook = await self.exchange.watch_order_book(symbol, limit)
+                self.core.order_book.offer(str(orderbook))
+            except Exception as e:
+                logging.exception(e)
 
-            logging.debug("Sending orderbook to core: %s", orderbook)
-            self.orderbooks_pub.offer(str(orderbook))
+    async def watch_balance(self) -> None:
+        """
+        Получать баланс и отправлять его торговому ядру
+        """
+        logging.info("Watching balance")
+
+        while True:
+            try:
+                balance = await self.exchange.watch_balance()
+                self.core.balance.offer(str(balance))
+            except Exception as e:
+                logging.exception(e)
+
+    async def watch_orders(self) -> None:
+        """
+        Получать ордера и отправлять их торговому ядру
+        """
+        symbol = self.config.get("watch_orders", "symbol", fallback=None)
+        since = self.config.get("watch_orders", "since", fallback=None)
+        limit = self.config.getint("watch_orders", "limit", fallback=None)
+
+        logging.info("Watching orders")
+
+        while True:
+            try:
+                orders = await self.exchange.watch_orders(symbol, since, limit)
+                self.core.orders.offer(str(orders))
+            except Exception as e:
+                logging.exception(e)
