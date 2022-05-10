@@ -20,7 +20,7 @@
 - [Установка Python](https://github.com/RoboTradeCode/gate-okx-python/wiki/Установка-Python)
 - [Установка Pipenv](https://github.com/RoboTradeCode/gate-okx-python/wiki/Установка-Pipenv)
 
-### Сборка и установка зависимостей
+### Установка зависимостей
 
 ```shell
 pipenv install
