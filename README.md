@@ -13,39 +13,12 @@
 
 ### Предварительные требования
 
-Перед установкой и использованием данного гейта, у вас должен быть установлен Aeron. Если это не так, то установите его,
-воспользовавшись [официальным руководством](https://github.com/real-logic/aeron#c-build):
+Перед установкой и использованием данного гейта, у вас должен быть установлен Aeron, Python 3.10 и Pipenv. Вы можете
+воспользоваться статьями в Wiki для установки всего необходимого:
 
-1. Установите зависимости сборки:
-
-```shell
-sudo apt update
-sudo apt install --assume-yes git cmake g++ default-jdk libbsd-dev uuid-dev
-git clone --branch 1.38.2 --depth 1 https://github.com/real-logic/aeron.git
-```
-
-2. Соберите и протестируйте код:
-
-```shell
-cd aeron
-mkdir --parents cppbuild/Debug
-cd cppbuild/Debug
-cmake -DCMAKE_BUILD_TYPE=Debug ../..
-cmake --build . --clean-first
-ctest
-```
-
-> Вы можете ускорить сборку, указав команде `cmake --build` максимальное количество параллельных процессов. За это
-> отвечает параметр [`--parallel`](https://cmake.org/cmake/help/latest/manual/cmake.1.html#build-a-project)
-
-3. Установите библиотеку в систему
-
-```shell
-sudo cmake --install .
-```
-
-> По умолчанию CMake установит библиотеку в `/usr/local`. Вы можете изменить директорию установки с помощью
-> параметра [`--prefix`](https://cmake.org/cmake/help/latest/variable/CMAKE_INSTALL_PREFIX.html#variable:CMAKE_INSTALL_PREFIX)
+- [Установка Aeron](https://github.com/RoboTradeCode/gate-okx-python/wiki/Установка-Aeron)
+- [Установка Python](https://github.com/RoboTradeCode/gate-okx-python/wiki/Установка-Python)
+- [Установка Pipenv](https://github.com/RoboTradeCode/gate-okx-python/wiki/Установка-Pipenv)
 
 ### Сборка и установка зависимостей
 
@@ -61,3 +34,5 @@ pipenv install
 ```shell
 pipenv run python main.py
 ```
+
+> Перед запуском скрипта, у вас должен быть запущен медиа-драйвер Aeron. Его можно запустить командой `aeronmd`
