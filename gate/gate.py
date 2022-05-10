@@ -40,44 +40,61 @@ class Gate:
 
         :param message: Сообщение от ядра
         """
-        command = json.loads(message)
+        try:
+            command = json.loads(message)
 
-        match command.get("action"):
-            case "create_order":
-                self.create_orders(command["data"])
-            case "cancel_order":
-                self.cancel_orders(command["data"])
-            case "get_balances":
-                self.fetch_balance(command.get("data", {}).get("assets"))
-            case "cancel_all_orders":
-                self.cancel_orders()
-            case "order_status":
-                self.order_status(**command.get("data", {}))
-            case _:
-                logging.warning("Unknown command: %s", command)
+            match command.get("action"):
+                case "create_order":
+                    task = self.create_orders(command["data"])
+                case "cancel_order":
+                    task = self.cancel_orders(command["data"])
+                case "get_balances":
+                    task = self.fetch_balance(command.get("data", {}).get("assets"))
+                case "cancel_all_orders":
+                    task = self.cancel_orders()
+                case "order_status":
+                    task = self.order_status(command["data"])
+                case _:
+                    task = None
+                    logging.warning("Unknown command: %s", command)
 
-    def create_orders(self, orders: list[dict]) -> None:
+            if task is not None:
+                asyncio.create_task(task)
+
+        except Exception as e:
+            logging.exception(e)
+
+    async def create_orders(self, orders: list[dict]) -> None:
         """
         Создать ордера
 
         :param orders: Ордера
         """
-        tasks = [self.exchange.create_order(**order) for order in orders]
-        asyncio.gather(*tasks)
+        try:
+            tasks = [self.exchange.create_order(**order) for order in orders]
+            await asyncio.gather(*tasks)
 
-    def cancel_orders(self, orders: Optional[list[dict]] = None) -> None:
+        except Exception as e:
+            logging.exception(e)
+
+    async def cancel_orders(self, orders: Optional[list[dict]] = None) -> None:
         """
         Отменить ордера
 
         :param orders:
         """
-        if orders is None:
-            orders = self.exchange.fetch_orders()
+        try:
+            if orders is None:
+                orders = await self.exchange.fetch_open_orders()
 
-        tasks = [self.exchange.cancel_order(**order) for order in orders]
-        asyncio.gather(*tasks)
+            orders = [{key: order[key] for key in ['id', 'symbol']} for order in orders]
+            tasks = [self.exchange.cancel_order(**order) for order in orders]
+            await asyncio.gather(*tasks)
 
-    def fetch_balance(self, parts: Optional[list[str]] = None) -> None:
+        except Exception as e:
+            logging.exception(e)
+
+    async def fetch_balance(self, parts: Optional[list[str]] = None) -> None:
         """
         Получить баланс по активам
 
@@ -95,12 +112,13 @@ class Gate:
         except Exception as e:
             logging.exception(e)
 
-    def order_status(self, **kwargs) -> None:
+    async def order_status(self, order) -> None:
         """
         Проверить статус ордера
         """
-        order_status = await self.exchange.fetch_order_status(**kwargs)
-        # TODO: send to core
+        print(order)
+        order_status = await self.exchange.fetch_order_status(**order)
+        self.core.offer_orders(order_status)
 
     async def poll(self) -> None:
         """
