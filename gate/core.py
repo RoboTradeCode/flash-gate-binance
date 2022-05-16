@@ -1,7 +1,6 @@
 """
 Реализация обмена сообщениями с торговым ядром
 """
-from configparser import ConfigParser
 from typing import Callable
 from aeron import Subscriber, Publisher
 from .formatter import Formatter
@@ -12,35 +11,26 @@ class Core:
     Класс для коммуникации с торговым ядром через каналы Aeron
     """
 
-    def __init__(self, config: ConfigParser, handler: Callable[[str], None]):
+    def __init__(self, config: dict, handler: Callable[[str], None]):
+        config = config["data"]["configs"]["gate_config"]
+
         # Создание объекта для форматирования отправляемых сообщений
         self.formatter = Formatter(config)
 
-        # Создание подписки Aeron для получения команд
-        self.commands = Subscriber(
-            handler,
-            config.get("core", "commands_channel"),
-            config.getint("core", "commands_stream_id"),
-            config.getint("core", "commands_fragment_limit"),
-        )
+        # Создание каналов Aeron
+        self.commands = Subscriber(handler, **config["aeron"]["commands"])
+        self.order_book = Publisher(**config["aeron"]["order_book"])
+        self.balance = Publisher(**config["aeron"]["balance"])
+        self.orders = Publisher(**config["aeron"]["orders"])
 
-        # Создание публикации для отправки биржевых стаканов
-        self.order_book = Publisher(
-            config.get("core", "order_book_channel"),
-            config.getint("core", "order_book_stream_id"),
-        )
-
-        # Создание публикации для отправки баланса
-        self.balance = Publisher(
-            config.get("core", "balance_channel"),
-            config.getint("core", "balance_stream_id"),
-        )
-
-        # Создание публикации для отправки ордеров
-        self.orders = Publisher(
-            config.get("core", "orders_channel"),
-            config.getint("core", "orders_stream_id"),
-        )
+    def close(self) -> None:
+        """
+        Закрыть соединение
+        """
+        self.commands.close()
+        self.order_book.close()
+        self.balance.close()
+        self.orders.close()
 
     def poll(self) -> None:
         """
@@ -48,23 +38,19 @@ class Core:
         """
         self.commands.poll()
 
-    def offer_order_book(self, order_book: dict) -> None:
+    def offer(self, data: dict, action: str) -> None:
         """
-        Отправить биржевой стакан
-        """
-        message = self.formatter.format_order_book(order_book)
-        self.order_book.offer(message)
+        Отправить ответ на команду ядра
 
-    def offer_balance(self, balance: dict):
+        :param data:   Ответ от биржы
+        :param action: Действие
         """
-        Отправить баланс
-        """
-        message = self.formatter.format_balance(balance)
-        self.balance.offer(message)
+        message = self.formatter.format(data, action)
 
-    def offer_orders(self, orders):
-        """
-        Отправить ордера
-        """
-        message = self.formatter.format_orders(orders)
-        self.orders.offer(message)
+        match action:
+            case "orderbook":
+                self.order_book.offer(message)
+            case "balances":
+                self.balance.offer(message)
+            case "order_status" | "order_created" | "order_cancelled":
+                self.orders.offer(message)

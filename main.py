@@ -1,6 +1,7 @@
 import asyncio
 import logging.config
 from configparser import ConfigParser
+import aiohttp
 from gate import Gate
 
 # Названия файлов с конфигурацией
@@ -12,10 +13,17 @@ async def main():
     # Инициализация логирования
     logging.config.fileConfig(LOGGING_CONFIG_FNAME)
 
-    # Получение конфигурации по-умолчанию
+    # Получение начальной конфигурации
     config = ConfigParser()
-    config.optionxform = str
     config.read(CONFIG_FILENAME)
+
+    # Получение конфигурации от конфигуратора
+    async with aiohttp.ClientSession() as session:
+        url = config.get("configurator", "url")
+        params = {"only_new": "false"}
+        async with session.get(url, params=params) as response:
+            config = await response.json()
+            print(config)
 
     # Запуск торгового гейта
     async with Gate(config) as gate:

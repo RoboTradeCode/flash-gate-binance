@@ -4,9 +4,7 @@
 import asyncio
 import json
 import logging
-from configparser import ConfigParser
 from typing import Optional
-from .configurator import Configurator
 from .core import Core
 from .exchange import instantiate_exchange
 
@@ -17,10 +15,9 @@ class Gate:
     стаканах, балансе и ордерах. Выполняет поступающие от торгового ядра команды
     """
 
-    def __init__(self, config: ConfigParser):
-        # Получение актуальной конфигурации
-        configurator = Configurator(config)
-        self.config = configurator.get_configuration()
+    def __init__(self, config: dict):
+        # Сохранение конфигурации
+        self.config = config
 
         # Создание экземпляра класса биржы для подключения и начала торговли
         self.exchange = instantiate_exchange(config)
@@ -33,6 +30,7 @@ class Gate:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.exchange.close()
+        self.core.close()
 
     def handle_command(self, message: str) -> None:
         """
@@ -48,12 +46,12 @@ class Gate:
                     task = self.create_orders(command["data"])
                 case "cancel_order":
                     task = self.cancel_orders(command["data"])
-                case "get_balances":
-                    task = self.fetch_balance(command.get("data", {}).get("assets"))
                 case "cancel_all_orders":
-                    task = self.cancel_orders()
+                    task = self.cancel_all_orders()
                 case "order_status":
                     task = self.order_status(command["data"])
+                case "get_balances":
+                    task = self.fetch_balance(command["data"])
                 case _:
                     task = None
                     logging.warning("Unknown command: %s", command)
@@ -77,24 +75,32 @@ class Gate:
         except Exception as e:
             logging.exception(e)
 
-    async def cancel_orders(self, orders: Optional[list[dict]] = None) -> None:
+    async def cancel_orders(self, orders: [list[dict]]) -> None:
         """
         Отменить ордера
 
-        :param orders:
+        :param orders: Ордера
         """
         try:
-            if orders is None:
-                orders = await self.exchange.fetch_open_orders()
-
-            orders = [{key: order[key] for key in ['id', 'symbol']} for order in orders]
+            orders = [{key: order[key] for key in ["id", "symbol"]} for order in orders]
             tasks = [self.exchange.cancel_order(**order) for order in orders]
             await asyncio.gather(*tasks)
 
         except Exception as e:
             logging.exception(e)
 
-    async def fetch_balance(self, parts: Optional[list[str]] = None) -> None:
+    async def cancel_all_orders(self) -> None:
+        """
+        Отменить все ордера
+        """
+        try:
+            orders = await self.exchange.fetch_open_orders()
+            await self.cancel_orders(orders)
+
+        except Exception as e:
+            logging.exception(e)
+
+    async def fetch_balance(self, parts: Optional[list[str]]) -> None:
         """
         Получить баланс по активам
 
@@ -104,21 +110,19 @@ class Gate:
             balance = await self.exchange.fetch_balance()
 
             if parts is not None:
-                partial_balance = {part: balance[part] for part in parts}
-                self.core.offer_balance(partial_balance)
+                balance = {part: balance[part] for part in parts}
 
-            self.core.offer_balance(balance)
+            self.core.offer(balance, "balances")
 
         except Exception as e:
             logging.exception(e)
 
     async def order_status(self, order) -> None:
         """
-        Проверить статус ордера
+        Получить статус ордера
         """
-        print(order)
         order_status = await self.exchange.fetch_order_status(**order)
-        self.core.offer_orders(order_status)
+        self.core.offer(order_status, "order_status")
 
     async def poll(self) -> None:
         """
@@ -132,7 +136,7 @@ class Gate:
         """
         Получать биржевые стаканы и отправлять их торговому ядру
         """
-        symbols = json.loads(self.config.get("gate", "symbols"))
+        symbols = [market["common_symbol"] for market in self.config["data"]["markets"]]
         tasks = [self.watch_order_book(symbol) for symbol in symbols]
         await asyncio.gather(*tasks)
 
@@ -142,14 +146,13 @@ class Gate:
 
         :param symbol: Актив
         """
-        limit = self.config.getint("watch_order_book", "limit", fallback=None)
-
         logging.info("Watching order book: %s", symbol)
 
         while True:
             try:
-                orderbook = await self.exchange.watch_order_book(symbol, limit)
-                self.core.offer_order_book(orderbook)
+                orderbook = await self.exchange.watch_order_book(symbol, 10)
+                self.core.offer(orderbook, "orderbook")
+
             except Exception as e:
                 logging.exception(e)
 
@@ -162,7 +165,8 @@ class Gate:
         while True:
             try:
                 balance = await self.exchange.watch_balance()
-                self.core.offer_balance(balance)
+                self.core.offer(balance, "balances")
+
             except Exception as e:
                 logging.exception(e)
 
@@ -170,15 +174,22 @@ class Gate:
         """
         Получать ордера и отправлять их торговому ядру
         """
-        symbol = self.config.get("watch_orders", "symbol", fallback=None)
-        since = self.config.get("watch_orders", "since", fallback=None)
-        limit = self.config.getint("watch_orders", "limit", fallback=None)
-
         logging.info("Watching orders")
 
         while True:
             try:
-                orders = await self.exchange.watch_orders(symbol, since, limit)
-                self.core.offer_orders(orders)
+                orders = await self.exchange.watch_orders()
+
+                for order in orders:
+                    match order["status"]:
+                        case "open":
+                            action = "order_created"
+                        case "closed":
+                            action = "order_closed"
+                        case _:
+                            action = "order_status"
+
+                    self.core.offer(order, action)
+
             except Exception as e:
                 logging.exception(e)

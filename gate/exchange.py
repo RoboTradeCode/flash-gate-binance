@@ -3,12 +3,11 @@
 """
 import logging
 from asyncio import get_running_loop
-from configparser import ConfigParser
 import ccxtpro
 from ccxtpro import okx
 
 
-def instantiate_exchange(config: ConfigParser) -> okx:
+def instantiate_exchange(config: dict) -> okx:
     """
     Создать экземпляр класса биржы на основе переданной конфигурации и проверить
     обязательные учётные данные
@@ -16,10 +15,12 @@ def instantiate_exchange(config: ConfigParser) -> okx:
     :param config: Конфигурация гейта
     :return: Экземпляр класса биржы
     """
-    # Получение названия биржы
-    exchange_id = config.get("gate", "exchange_id")
+    config = config["data"]["configs"]["gate_config"]
 
-    # Получение класса биржы и конфигурации
+    # Получение названия биржы
+    exchange_id = config["exchange_id"]
+
+    # Получение класса биржы
     logging.info("Instantiating exchange: %s", exchange_id)
     exchange_class = getattr(ccxtpro, exchange_id)
     exchange_config = {**config["exchange"], "asyncio_loop": get_running_loop()}
@@ -27,9 +28,8 @@ def instantiate_exchange(config: ConfigParser) -> okx:
     # Создание экземпляра класса биржы
     exchange: okx = exchange_class(exchange_config)
 
-    # Проверка тестового режима
-    sandbox_mode = config.getboolean("gate", "sandbox_mode")
-    exchange.set_sandbox_mode(sandbox_mode)
+    # Установка тестового режима
+    exchange.set_sandbox_mode(config["sandbox_mode"])
 
     # Проверка обязательных учётных данных
     check_credentials(exchange)

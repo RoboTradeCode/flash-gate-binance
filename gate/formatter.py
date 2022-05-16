@@ -1,9 +1,9 @@
 """
-Форматирование сообщений для передачи другим микросервисам
+Форматирование сообщений
 """
 import json
-from configparser import ConfigParser
 from datetime import datetime
+from typing import Any
 
 
 class Formatter:
@@ -11,69 +11,30 @@ class Formatter:
     Класс для форматирования сообщений, отправляемых торговому ядру
     """
 
-    def __init__(self, config: ConfigParser):
-        # Сохранение конфигурации
-        self.config = config
+    def __init__(self, config: dict):
+        self.exchange = config["exchange_id"]
+        self.instance = config["instance"]
 
-    def format_order_book(self, order_book):
+    def base(self):
+        return {
+            "event": "data",
+            "exchange": self.exchange,
+            "node": "gate",
+            "instance": self.instance,
+            "message": None,
+            "algo": "spread_bot_cpp",
+            "timestamp": int(datetime.now().timestamp()),
+        }
+
+    def format(self, data: Any, action: str):
         """
         Привести биржевой стакан к общему формату обмена данными
 
-        :param order_book: Биржевой стакан
+        :param data:   Ответ от биржы
+        :param action: Действие
         :return: Отформатированное сообщение
         """
-        return json.dumps(
-            {
-                "event": "data",
-                "exchange": self.config.get("gate", "exchange_id"),
-                "node": "gate",
-                "instance": self.config.get("gate", "instance"),
-                "action": "orderbook",
-                "message": None,
-                "algo": "signal",
-                "timestamp": int(datetime.now().timestamp()),
-                "data": order_book,
-            }
-        )
-
-    def format_balance(self, balance):
-        """
-        Привести баланс к общему формату обмена данными
-
-        :param balance: Баланс
-        :return: Отформатированное сообщение
-        """
-        return json.dumps(
-            {
-                "event": "data",
-                "exchange": self.config.get("gate", "exchange_id"),
-                "node": "gate",
-                "instance": self.config.get("gate", "instance"),
-                "action": "balances",
-                "message": None,
-                "algo": "3t_php",
-                "timestamp": int(datetime.now().timestamp()),
-                "data": balance,
-            }
-        )
-
-    def format_orders(self, orders):
-        """
-        Привести ордера к общему формату обмена данными
-
-        :param orders: Баланс
-        :return: Отформатированное сообщение
-        """
-        return json.dumps(
-            {
-                "event": "data",
-                "exchange": self.config.get("gate", "exchange_id"),
-                "node": "gate",
-                "instance": self.config.get("gate", "instance"),
-                "action": "order_created",
-                "message": None,
-                "algo": "spread_bot_cpp",
-                "timestamp": int(datetime.now().timestamp()),
-                "data": orders,
-            }
-        )
+        message = self.base()
+        message["action"] = action
+        message["data"] = data
+        return json.dumps(message)
