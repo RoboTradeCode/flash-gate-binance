@@ -18,10 +18,10 @@ class Core:
         self.formatter = Formatter(config)
 
         # Создание каналов Aeron
-        self.commands = Subscriber(handler, **config["aeron"]["commands"])
-        self.order_book = Publisher(**config["aeron"]["order_book"])
-        self.balance = Publisher(**config["aeron"]["balance"])
-        self.orders = Publisher(**config["aeron"]["orders"])
+        self.commands = Subscriber(handler, **config["aeron"]["core"])
+        self.order_book = Publisher(**config["aeron"]["orderbooks"])
+        self.balance = Publisher(**config["aeron"]["balances"])
+        self.orders = Publisher(**config["aeron"]["orders_statuses"])
 
     def close(self) -> None:
         """
