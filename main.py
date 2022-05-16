@@ -32,6 +32,7 @@ async def main():
             gate.watch_order_books(),
             gate.watch_balance(),
             gate.watch_orders(),
+            gate.ping(),
         ]
         await asyncio.gather(*tasks)
 

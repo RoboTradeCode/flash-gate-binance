@@ -1,9 +1,10 @@
 """
 Реализация обмена сообщениями с торговым ядром
 """
-from typing import Callable
+from typing import Any, Callable
 from aeron import Subscriber, Publisher
 from .formatter import Formatter
+import logging
 
 
 class Core:
@@ -38,7 +39,7 @@ class Core:
         """
         self.commands.poll()
 
-    def offer(self, data: dict, action: str) -> None:
+    def offer(self, data: Any, action: str) -> None:
         """
         Отправить ответ на команду ядра
 
@@ -54,3 +55,5 @@ class Core:
                 self.balance.offer(message)
             case "order_status" | "order_created" | "order_cancelled":
                 self.orders.offer(message)
+            case "ping":
+                logging.getLogger("aeron").info(message)

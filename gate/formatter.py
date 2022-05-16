@@ -30,11 +30,16 @@ class Formatter:
         """
         Привести биржевой стакан к общему формату обмена данными
 
-        :param data:   Ответ от биржы
+        :param data: Ответ от биржы
         :param action: Действие
         :return: Отформатированное сообщение
         """
+
         message = self.base()
         message["action"] = action
         message["data"] = data
+
+        if action == "ping":
+            message["event"] = "info"
+
         return json.dumps(message)

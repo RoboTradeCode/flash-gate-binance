@@ -25,6 +25,9 @@ class Gate:
         # Создание каналов Aeron для ядра
         self.core = Core(config, self.handle_command)
 
+        # Сквозной счётчик
+        self.data = 0
+
     async def __aenter__(self):
         return self
 
@@ -151,6 +154,7 @@ class Gate:
         while True:
             try:
                 orderbook = await self.exchange.watch_order_book(symbol, 10)
+                self.data += 1
                 self.core.offer(orderbook, "orderbook")
 
             except Exception as e:
@@ -193,3 +197,8 @@ class Gate:
 
             except Exception as e:
                 logging.exception(e)
+
+    async def ping(self):
+        while True:
+            self.core.offer(self.data, "ping")
+            await asyncio.sleep(1)
