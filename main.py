@@ -27,7 +27,6 @@ async def main():
         params = {"only_new": "false"}
         async with session.get(url, params=params) as response:
             config = await response.json()
-            print(config)
 
     # Запуск торгового гейта
     async with Gate(config) as gate:
