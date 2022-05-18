@@ -153,7 +153,10 @@ class Gate:
 
         while True:
             try:
-                orderbook = await self.exchange.watch_order_book(symbol, 10)
+                orderbook = await self.exchange.watch_order_book(
+                    symbol,
+                    self.config["data"]["configs"]["gate_config"]["info"]["depth"],
+                )
                 self.data += 1
                 self.core.offer(orderbook, "orderbook")
 
@@ -201,4 +204,6 @@ class Gate:
     async def ping(self):
         while True:
             self.core.offer(self.data, "ping")
-            await asyncio.sleep(1)
+            await asyncio.sleep(
+                self.config["data"]["configs"]["gate_config"]["info"]["ping_delay"]
+            )
