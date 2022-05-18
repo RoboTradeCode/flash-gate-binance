@@ -1,10 +1,11 @@
 """
 Реализация обмена сообщениями с торговым ядром
 """
-from typing import Any, Callable
-from aeron import Subscriber, Publisher
-from .formatter import Formatter
 import logging
+from typing import Any, Callable
+from aeron import Subscriber, Publisher, AeronPublicationNotConnectedError
+from .formatter import Formatter
+from .logging_handlers import AeronHandler
 
 
 class Core:
@@ -19,10 +20,15 @@ class Core:
         self.formatter = Formatter(config)
 
         # Создание каналов Aeron
-        self.commands = Subscriber(handler, **config["aeron"]["core"])
-        self.order_book = Publisher(**config["aeron"]["orderbooks"])
-        self.balance = Publisher(**config["aeron"]["balances"])
-        self.orders = Publisher(**config["aeron"]["orders_statuses"])
+        self.commands = Subscriber(handler, **config["aeron"]["subscribers"]["core"])
+        self.order_book = Publisher(**config["aeron"]["publishers"]["orderbooks"])
+        self.balance = Publisher(**config["aeron"]["publishers"]["balances"])
+        self.orders = Publisher(**config["aeron"]["publishers"]["orders_statuses"])
+
+        # Создание логгера
+        logging_handler = AeronHandler(**config["aeron"]["publishers"]["logs"])
+        self.logger = logging.getLogger("aeron")
+        self.logger.addHandler(logging_handler)
 
     def close(self) -> None:
         """
@@ -48,12 +54,16 @@ class Core:
         """
         message = self.formatter.format(data, action)
 
-        match action:
-            case "orderbook":
-                self.order_book.offer(message)
-            case "balances":
-                self.balance.offer(message)
-            case "order_status" | "order_created" | "order_cancelled":
-                self.orders.offer(message)
-            case "ping":
-                logging.getLogger("aeron").info(message)
+        try:
+            match action:
+                case "orderbook":
+                    self.order_book.offer(message)
+                case "balances":
+                    self.balance.offer(message)
+                case "order_status" | "order_created" | "order_cancelled":
+                    self.orders.offer(message)
+                case "ping":
+                    self.logger.info(message)
+
+        except AeronPublicationNotConnectedError:
+            pass

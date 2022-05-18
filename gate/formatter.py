@@ -12,14 +12,15 @@ class Formatter:
     """
 
     def __init__(self, config: dict):
-        self.exchange = config["exchange_id"]
-        self.instance = config["instance"]
+        self.exchange = config["info"]["exchange"]
+        self.instance = config["info"]["instance"]
+        self.node = config["info"]["node"]
 
     def base(self):
         return {
             "event": "data",
             "exchange": self.exchange,
-            "node": "gate",
+            "node": self.node,
             "instance": self.instance,
             "message": None,
             "algo": "spread_bot_cpp",

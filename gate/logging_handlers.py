@@ -17,4 +17,4 @@ class AeronHandler(Handler):
         self.publication = Publisher(channel, stream_id)
 
     def emit(self, record: LogRecord) -> None:
-        self.publication.offer(str(record))
+        self.publication.offer(record.msg)

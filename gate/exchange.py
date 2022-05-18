@@ -18,12 +18,15 @@ def instantiate_exchange(config: dict) -> okx:
     config = config["data"]["configs"]["gate_config"]
 
     # Получение названия биржы
-    exchange_id = config["exchange_id"]
+    exchange_id = config["info"]["exchange"]
 
     # Получение класса биржы
     logging.info("Instantiating exchange: %s", exchange_id)
     exchange_class = getattr(ccxtpro, exchange_id)
-    exchange_config = {**config["exchange"], "asyncio_loop": get_running_loop()}
+    exchange_config = {
+        **config["account"],
+        "asyncio_loop": get_running_loop(),
+    }
 
     # Создание экземпляра класса биржы
     exchange: okx = exchange_class(exchange_config)
