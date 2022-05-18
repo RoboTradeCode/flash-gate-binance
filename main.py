@@ -19,7 +19,11 @@ async def main():
 
     # Получение конфигурации от конфигуратора
     async with aiohttp.ClientSession() as session:
-        url = config.get("configurator", "url")
+        base_url = config.get("configurator", "base_url")
+        exchange = config.get("gate", "exchange")
+        instance = config.get("gate", "instance")
+        url = f"{base_url}/{exchange}/{instance}"
+
         params = {"only_new": "false"}
         async with session.get(url, params=params) as response:
             config = await response.json()
