@@ -14,10 +14,10 @@ class Core:
     """
 
     def __init__(self, config: dict, handler: Callable[[str], None]):
-        config = config["data"]["configs"]["gate_config"]
-
         # Создание объекта для форматирования отправляемых сообщений
         self.formatter = Formatter(config)
+
+        config = config["data"]["configs"]["gate_config"]
 
         # Создание каналов Aeron
         self.commands = Subscriber(handler, **config["aeron"]["subscribers"]["core"])

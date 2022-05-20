@@ -12,9 +12,10 @@ class Formatter:
     """
 
     def __init__(self, config: dict):
-        self.exchange = config["info"]["exchange"]
-        self.instance = config["info"]["instance"]
-        self.node = config["info"]["node"]
+        self.exchange = config["data"]["configs"]["gate_config"]["info"]["exchange"]
+        self.instance = config["data"]["configs"]["gate_config"]["info"]["instance"]
+        self.node = config["data"]["configs"]["gate_config"]["info"]["node"]
+        self.assets = [asset["common"] for asset in config["data"]["assets_labels"]]
 
     def base(self):
         return {
@@ -42,5 +43,10 @@ class Formatter:
 
         if action == "ping":
             message["event"] = "info"
+
+        if action == "balances":
+            message["data"] = {
+                key: value for key, value in data.items() if key in self.assets
+            }
 
         return json.dumps(message)
