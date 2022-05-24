@@ -54,7 +54,7 @@ class Gate:
                     task = self._order_status(message["data"])
                 case {"event": "command", "action": "get_balances"}:
                     parts = message["data"]["assets"]
-                    task = self.exchange.fetch_partial_balances(parts)
+                    task = self._get_balances(parts)
                 case _:
                     task = None
                     logging.warning("Unknown message type")
@@ -73,6 +73,11 @@ class Gate:
     async def _order_status(self, order):
         order = await self.exchange.fetch_order(order)
         self.core.offer(self.formatter.format(order, "order_status"))
+
+    async def _get_balances(self, parts):
+        balance = await self.exchange.fetch_partial_balances(parts)
+        message = self.formatter.format(balance, "balances")
+        self.core.offer(message)
 
     async def _watch_order_book(self, symbol, limit):
         while True:

@@ -43,7 +43,7 @@ class Formatter:
                     "amount",
                     "filled",
                 ]
-                message["data"] = {key: value for key, value in data if key in keys}
+                message["data"] = {key: data[key] for key in data if key in keys}
             case "ping":
                 message["data"] = data
 
