@@ -1,43 +1,27 @@
 import asyncio
 import logging.config
 from configparser import ConfigParser
-import aiohttp
-from gate import Gate
+from gate import Gate, Configurator
 
-# Названия файлов с конфигурацией
-LOGGING_CONFIG_FNAME: str = "logging.conf"
-CONFIG_FILENAME: str = "config.ini"
+LOGGING_FNAME = "logging.conf"
+CONFIG_FILENAME = "config.ini"
 
 
 async def main():
-    # Инициализация логирования
-    logging.config.fileConfig(LOGGING_CONFIG_FNAME)
+    logging.config.fileConfig(LOGGING_FNAME)
+    initial_config = ConfigParser()
+    initial_config.read(CONFIG_FILENAME)
 
-    # Получение начальной конфигурации
-    config = ConfigParser()
-    config.read(CONFIG_FILENAME)
+    base_url = initial_config.get("configurator", "base_url")
+    exchange = initial_config.get("configurator", "exchange")
+    instance = initial_config.get("configurator", "instance")
+    sandbox_mode = initial_config.getboolean("gate", "sandbox_mode")
 
-    # Получение конфигурации от конфигуратора
-    async with aiohttp.ClientSession() as session:
-        base_url = config.get("configurator", "base_url")
-        exchange = config.get("gate", "exchange")
-        instance = config.get("gate", "instance")
-        url = f"{base_url}/{exchange}/{instance}"
+    async with Configurator(base_url, exchange, instance) as configurator:
+        config = await configurator.get_config()
 
-        params = {"only_new": "false"}
-        async with session.get(url, params=params) as response:
-            config = await response.json()
-
-    # Запуск торгового гейта
-    async with Gate(config) as gate:
-        tasks = [
-            gate.poll(),
-            gate.watch_order_books(),
-            gate.watch_balance(),
-            gate.watch_orders(),
-            gate.ping(),
-        ]
-        await asyncio.gather(*tasks)
+    async with Gate(config, sandbox_mode) as gate:
+        await gate.run()
 
 
 if __name__ == "__main__":

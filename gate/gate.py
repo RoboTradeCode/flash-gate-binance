@@ -1,209 +1,135 @@
-"""
-Реализация торгового гейта
-"""
 import asyncio
 import json
 import logging
-from typing import Optional
+from aeron.concurrent import AsyncSleepingIdleStrategy
 from .core import Core
-from .exchange import instantiate_exchange
+from .exchange import Exchange
+from .formatter import Formatter
+from .logging_handlers import AeronHandler
+
+IDLE_SLEEP_MS = 1
 
 
 class Gate:
-    """
-    Торговый гейт. Подключается к бирже и посылает торговому ядру информацию о биржевых
-    стаканах, балансе и ордерах. Выполняет поступающие от торгового ядра команды
-    """
+    def __init__(self, config: dict, sandbox_mode: bool = False):
+        assets: list = config["data"]["assets_labels"]
+        markets: list = config["data"]["markets"]
+        gate_config = config["data"]["configs"]["gate_config"]
+        aeron_handler = AeronHandler(**gate_config["aeron"]["publishers"]["logs"])
 
-    def __init__(self, config: dict):
-        # Сохранение конфигурации
-        self.config = config
+        self.exchange = Exchange(
+            gate_config["info"]["exchange"], sandbox_mode, **gate_config["account"]
+        )
+        self.formatter = Formatter(config)
+        self.core = Core(gate_config["aeron"], self._core_handler)
+        self.idle_strategy = AsyncSleepingIdleStrategy(IDLE_SLEEP_MS)
+        self.logs = logging.getLogger()
+        self.logs.addHandler(aeron_handler)
 
-        # Создание экземпляра класса биржы для подключения и начала торговли
-        self.exchange = instantiate_exchange(config)
-
-        # Создание каналов Aeron для ядра
-        self.core = Core(config, self.handle_command)
-
-        # Сквозной счётчик
+        self.assets: list[str] = [asset["common"] for asset in assets]
+        self.symbols: list[str] = [market["common_symbol"] for market in markets]
+        self.depth: int = gate_config["info"]["depth"]
         self.data = 0
+        self.ping_delay = gate_config["info"]["ping_delay"]
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.exchange.close()
-        self.core.close()
+        await self.close()
 
-    def handle_command(self, message: str) -> None:
-        """
-        Функция обратного вызова для приёма команд от ядра
-
-        :param message: Сообщение от ядра
-        """
+    def _core_handler(self, message: str):
         try:
-            command = json.loads(message)
+            logging.info("Core: %s", message)
+            message = json.loads(message)
 
-            match command.get("action"):
-                case "create_order":
-                    task = self.create_orders(command["data"])
-                case "cancel_order":
-                    task = self.cancel_orders(command["data"])
-                case "cancel_all_orders":
-                    task = self.cancel_all_orders()
-                case "order_status":
-                    task = self.order_status(command["data"])
-                case "get_balances":
-                    task = self.fetch_balance(command["data"])
+            match message:
+                case {"event": "command", "action": "create_order"}:
+                    task = self.exchange.create_orders(message["data"])
+                case {"event": "command", "action": "cancel_order"}:
+                    task = self.exchange.cancel_orders(message["data"])
+                case {"event": "command", "action": "cancel_all_orders"}:
+                    task = self.exchange.cancel_all_orders()
+                case {"event": "command", "action": "order_status"}:
+                    task = self._order_status(message["data"])
+                case {"event": "command", "action": "get_balances"}:
+                    parts = message["data"]["assets"]
+                    task = self.exchange.fetch_partial_balances(parts)
                 case _:
                     task = None
-                    logging.warning("Unknown command: %s", command)
+                    logging.warning("Unknown message type")
 
             if task is not None:
                 asyncio.create_task(task)
 
         except Exception as e:
-            logging.exception(e)
+            logging.error(e)
 
-    async def create_orders(self, orders: list[dict]) -> None:
-        """
-        Создать ордера
-
-        :param orders: Ордера
-        """
-        try:
-            tasks = [self.exchange.create_order(**order) for order in orders]
-            await asyncio.gather(*tasks)
-
-        except Exception as e:
-            logging.exception(e)
-
-    async def cancel_orders(self, orders: [list[dict]]) -> None:
-        """
-        Отменить ордера
-
-        :param orders: Ордера
-        """
-        try:
-            orders = [{key: order[key] for key in ["id", "symbol"]} for order in orders]
-            tasks = [self.exchange.cancel_order(**order) for order in orders]
-            await asyncio.gather(*tasks)
-
-        except Exception as e:
-            logging.exception(e)
-
-    async def cancel_all_orders(self) -> None:
-        """
-        Отменить все ордера
-        """
-        try:
-            orders = await self.exchange.fetch_open_orders()
-            await self.cancel_orders(orders)
-
-        except Exception as e:
-            logging.exception(e)
-
-    async def fetch_balance(self, parts: Optional[list[str]]) -> None:
-        """
-        Получить баланс по активам
-
-        :param parts: Активы
-        """
-        try:
-            balance = await self.exchange.fetch_balance()
-
-            if parts is not None:
-                balance = {part: balance[part] for part in parts}
-
-            self.core.offer(balance, "balances")
-
-        except Exception as e:
-            logging.exception(e)
-
-    async def order_status(self, order) -> None:
-        """
-        Получить статус ордера
-        """
-        order_status = await self.exchange.fetch_order_status(**order)
-        self.core.offer(order_status, "order_status")
-
-    async def poll(self) -> None:
-        """
-        Проверять наличие новых сообщений от торгового ядра
-        """
+    async def _poll(self):
         while True:
-            self.core.poll()
-            await asyncio.sleep(0.1)
+            fragments_read = self.core.poll()
+            await self.idle_strategy.idle(fragments_read)
 
-    async def watch_order_books(self) -> None:
-        """
-        Получать биржевые стаканы и отправлять их торговому ядру
-        """
-        symbols = [market["common_symbol"] for market in self.config["data"]["markets"]]
-        tasks = [self.watch_order_book(symbol) for symbol in symbols]
+    async def _order_status(self, order):
+        order = await self.exchange.fetch_order(order)
+        self.core.offer(self.formatter.format(order, "order_status"))
+
+    async def _watch_order_book(self, symbol, limit):
+        while True:
+            orderbook = await self.exchange.watch_order_book(symbol, limit)
+            self.data += 1
+
+            message = self.formatter.format(orderbook, "orderbook", symbol)
+            self.core.offer(message)
+
+    async def _watch_order_books(self):
+        tasks = [self._watch_order_book(symbol, self.depth) for symbol in self.symbols]
         await asyncio.gather(*tasks)
 
-    async def watch_order_book(self, symbol) -> None:
-        """
-        Получать биржевой стакан и отправлять его торговому ядру
+    async def _watch_balance(self) -> None:
+        while True:
+            balance = await self.exchange.watch_balance()
+            balance = {part: balance[part] for part in self.assets}
+            message = self.formatter.format(balance, "balances")
+            self.core.offer(message)
 
-        :param symbol: Актив
-        """
-        logging.info("Watching order book: %s", symbol)
+    async def _watch_orders(self) -> None:
+        while True:
+            orders = await self.exchange.watch_orders()
 
+            for order in orders:
+                match order["status"]:
+                    case "open":
+                        action = "order_created"
+                    case "closed":
+                        action = "order_closed"
+                    case _:
+                        action = "order_status"
+
+                message = self.formatter.format(order, action)
+                self.core.offer(message)
+
+    async def _ping(self):
+        while True:
+            message = self.formatter.format(self.data, "ping")
+            self.logs.info(json.dumps(message))
+            await asyncio.sleep(self.ping_delay)
+
+    async def run(self):
         while True:
             try:
-                orderbook = await self.exchange.watch_order_book(
-                    symbol,
-                    self.config["data"]["configs"]["gate_config"]["info"]["depth"],
-                )
-                self.data += 1
-                self.core.offer(orderbook, "orderbook")
+                tasks = [
+                    self._poll(),
+                    self._watch_order_books(),
+                    self._watch_balance(),
+                    self._watch_orders(),
+                    self._ping(),
+                ]
+                await asyncio.gather(*tasks)
 
             except Exception as e:
-                logging.exception(e)
+                logging.error(e)
 
-    async def watch_balance(self) -> None:
-        """
-        Получать баланс и отправлять его торговому ядру
-        """
-        logging.info("Watching balance")
-
-        while True:
-            try:
-                balance = await self.exchange.watch_balance()
-                self.core.offer(balance, "balances")
-
-            except Exception as e:
-                logging.exception(e)
-
-    async def watch_orders(self) -> None:
-        """
-        Получать ордера и отправлять их торговому ядру
-        """
-        logging.info("Watching orders")
-
-        while True:
-            try:
-                orders = await self.exchange.watch_orders()
-
-                for order in orders:
-                    match order["status"]:
-                        case "open":
-                            action = "order_created"
-                        case "closed":
-                            action = "order_closed"
-                        case _:
-                            action = "order_status"
-
-                    self.core.offer(order, action)
-
-            except Exception as e:
-                logging.exception(e)
-
-    async def ping(self):
-        while True:
-            self.core.offer(self.data, "ping")
-            await asyncio.sleep(
-                self.config["data"]["configs"]["gate_config"]["info"]["ping_delay"]
-            )
+    async def close(self):
+        await self.exchange.close()
+        self.core.close()

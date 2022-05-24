@@ -1,54 +1,88 @@
-"""
-Набор функций для работы с классом биржы
-"""
-import logging
+import asyncio
 from asyncio import get_running_loop
+from typing import Type
 import ccxtpro
 from ccxtpro import okx
 
 
-def instantiate_exchange(config: dict) -> okx:
-    """
-    Создать экземпляр класса биржы на основе переданной конфигурации и проверить
-    обязательные учётные данные
+class Exchange:
+    def __init__(self, exchange_id: str, sandbox_mode: bool = False, **kwargs):
+        exchange_class: Type[okx] = getattr(ccxtpro, exchange_id)
+        exchange_config = {**kwargs, "asyncio_loop": get_running_loop()}
 
-    :param config: Конфигурация гейта
-    :return: Экземпляр класса биржы
-    """
-    config = config["data"]["configs"]["gate_config"]
+        self.exchange = exchange_class(exchange_config)
+        self.exchange.set_sandbox_mode(sandbox_mode)
+        self.exchange.check_required_credentials()
 
-    # Получение названия биржы
-    exchange_id = config["info"]["exchange"]
+    async def __aenter__(self):
+        return self
 
-    # Получение класса биржы
-    logging.info("Instantiating exchange: %s", exchange_id)
-    exchange_class = getattr(ccxtpro, exchange_id)
-    exchange_config = {
-        **config["account"],
-        "asyncio_loop": get_running_loop(),
-    }
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
 
-    # Создание экземпляра класса биржы
-    exchange: okx = exchange_class(exchange_config)
+    async def create_orders(self, orders: list[dict[str, str | float]]):
+        # [
+        #     {
+        #         "symbol": "BTC/USDT",
+        #         "type": "limit",
+        #         "side": "sell",
+        #         "price": 41500.34,
+        #         "amount": 0.023
+        #     },
+        #     {
+        #         "symbol": "ETH/USDT",
+        #         "type": "limit",
+        #         "side": "sell",
+        #         "price": 41500.34,
+        #         "amount": 0.023
+        #     }
+        # ]
+        tasks = [self.exchange.create_order(**order) for order in orders]
+        await asyncio.gather(*tasks)
 
-    # Установка тестового режима
-    exchange.set_sandbox_mode(config["sandbox_mode"])
+    async def cancel_orders(self, orders: list[dict[str, str]]):
+        # [
+        #     {
+        #         "id": "86579506507056097",
+        #         "symbol": "BTC/USDT"
+        #     },
+        #     {
+        #         "id": "86579506507056044",
+        #         "symbol": "ETH/USDT"
+        #     }
+        # ]
+        tasks = [self.exchange.cancel_order(**order) for order in orders]
+        await asyncio.gather(*tasks)
 
-    # Проверка обязательных учётных данных
-    check_credentials(exchange)
-    logging.info("Exchange instantiation has been successful")
+    async def cancel_all_orders(self):
+        orders = await self.exchange.fetch_open_orders()
+        orders = [{arg: order[arg] for arg in ["id", "symbol"]} for order in orders]
+        await self.cancel_orders(orders)
 
-    return exchange
+    async def fetch_order(self, order: dict[str, str]):
+        # {
+        #     "id": "86579506507056097",
+        #     "symbol": "BTC/USDT"
+        # }
+        return await self.exchange.fetch_order(**order)
 
+    async def fetch_partial_balances(self, parts: list[str]):
+        # [
+        #     "BTC",
+        #     "ETH",
+        #     "USDT"
+        # ]
+        balance = await self.exchange.fetch_balance()
+        return {part: balance[part] for part in parts}
 
-def check_credentials(exchange: okx) -> None:
-    """
-    Проверить обязательные учётные данные для экземпляра класса биржы
+    async def watch_order_book(self, symbols, limit):
+        return await self.exchange.watch_order_book(symbols, limit)
 
-    :param exchange: Экземпляр класса биржы
-    """
-    required_credentials = exchange.requiredCredentials
+    async def watch_balance(self):
+        return await self.exchange.watch_balance()
 
-    logging.info("Checking required credentials: %s", required_credentials)
-    exchange.check_required_credentials()
-    logging.info("Required credentials check has been successful")
+    async def watch_orders(self):
+        return await self.exchange.watch_orders()
+
+    async def close(self):
+        await self.exchange.close()

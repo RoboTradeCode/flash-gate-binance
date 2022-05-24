@@ -1,20 +1,12 @@
-"""
-Форматирование сообщений
-"""
-import json
 from datetime import datetime
-from typing import Any
 
 
 class Formatter:
-    """
-    Класс для форматирования сообщений, отправляемых торговому ядру
-    """
-
     def __init__(self, config: dict):
         self.exchange = config["data"]["configs"]["gate_config"]["info"]["exchange"]
         self.instance = config["data"]["configs"]["gate_config"]["info"]["instance"]
         self.node = config["data"]["configs"]["gate_config"]["info"]["node"]
+        self.algo = config["algo"]
         self.assets = [asset["common"] for asset in config["data"]["assets_labels"]]
 
     def base(self):
@@ -24,29 +16,35 @@ class Formatter:
             "node": self.node,
             "instance": self.instance,
             "message": None,
-            "algo": "spread_bot_cpp",
+            "algo": self.algo,
             "timestamp": int(datetime.now().timestamp()),
         }
 
-    def format(self, data: Any, action: str):
-        """
-        Привести биржевой стакан к общему формату обмена данными
-
-        :param data: Ответ от биржы
-        :param action: Действие
-        :return: Отформатированное сообщение
-        """
-
+    def format(self, data, action: str, symbol: str = None):
         message = self.base()
         message["action"] = action
-        message["data"] = data
+        match action:
+            case "orderbook":
+                keys = ["bids", "asks", "symbol", "timestamp"]
+                message["data"] = {key: data[key] for key in data if key in keys}
+                if message["data"]["symbol"] is None:
+                    message["data"]["symbol"] = symbol
+            case "balances":
+                message["data"] = data
+            case "order_created" | "order_closed" | "order_status":
+                keys = [
+                    "id",
+                    "timestamp",
+                    "status",
+                    "symbol",
+                    "type",
+                    "side",
+                    "price",
+                    "amount",
+                    "filled",
+                ]
+                message["data"] = {key: value for key, value in data if key in keys}
+            case "ping":
+                message["data"] = data
 
-        if action == "ping":
-            message["event"] = "info"
-
-        if action == "balances":
-            message["data"] = {
-                key: value for key, value in data.items() if key in self.assets
-            }
-
-        return json.dumps(message)
+        return message
