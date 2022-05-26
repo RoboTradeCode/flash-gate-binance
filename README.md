@@ -29,6 +29,11 @@ pipenv install
 > При установке зависимостей используется подключение с помощью SSH. Подробнее о нём вы можете прочитать в
 > руководстве ["Connecting to GitHub with SSH"](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
 
+### Конфигурация
+
+Описание начальной и типовой конфигураций приведено
+в [одноимённом разделе Wiki](https://github.com/RoboTradeCode/gate-okx-python/wiki/Конфигурация)
+
 ## Использование
 
 ```shell
