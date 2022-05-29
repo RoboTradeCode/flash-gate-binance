@@ -23,8 +23,8 @@ class Gate:
         self.formatter = Formatter(config)
         self.core = Core(gate_config["aeron"], self._core_handler)
         self.idle_strategy = AsyncSleepingIdleStrategy(IDLE_SLEEP_MS)
-        self.logs = logging.getLogger()
-        self.logs.addHandler(aeron_handler)
+        self.logger = logging.getLogger()
+        self.logger.addHandler(aeron_handler)
 
         self.assets: list[str] = [asset["common"] for asset in assets]
         self.symbols: list[str] = [market["common_symbol"] for market in markets]
@@ -96,6 +96,7 @@ class Gate:
             balance = await self.exchange.watch_balance()
             balance = {part: balance[part] for part in self.assets}
             message = self.formatter.format(balance, "balances")
+            self.logger.info(json.dumps(message))
             self.core.offer(message)
 
     async def _watch_orders(self) -> None:
@@ -112,12 +113,13 @@ class Gate:
                         action = "order_status"
 
                 message = self.formatter.format(order, action)
+                self.logger.info(json.dumps(message))
                 self.core.offer(message)
 
     async def _ping(self):
         while True:
             message = self.formatter.format(self.data, "ping")
-            self.logs.info(json.dumps(message))
+            self.logger.info(json.dumps(message))
             await asyncio.sleep(self.ping_delay)
 
     async def run(self):
