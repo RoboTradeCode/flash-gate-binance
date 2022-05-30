@@ -40,30 +40,35 @@ class Gate:
 
     def _core_handler(self, message: str):
         try:
-            logging.info("Core: %s", message)
+            logging.info("Сообщение от ядра: %s", message)
             message = json.loads(message)
 
             match message:
                 case {"event": "command", "action": "create_order"}:
+                    logging.info("Создание ордеров: %s", message["data"])
                     task = self.exchange.create_orders(message["data"])
                 case {"event": "command", "action": "cancel_order"}:
+                    logging.info("Отмена ордеров: %s", message["data"])
                     task = self.exchange.cancel_orders(message["data"])
                 case {"event": "command", "action": "cancel_all_orders"}:
+                    logging.info("Отмена всех ордеров")
                     task = self.exchange.cancel_all_orders()
                 case {"event": "command", "action": "order_status"}:
+                    logging.info("Получение статуса ордера: %s", message["data"])
                     task = self._order_status(message["data"])
                 case {"event": "command", "action": "get_balances"}:
+                    logging.info("Получение баланса: %s", message["data"]["assets"])
                     parts = message["data"]["assets"]
                     task = self._get_balances(parts)
                 case _:
                     task = None
-                    logging.warning("Unknown message type")
+                    logging.warning("Неизвестная команда от ядра: %s", message)
 
             if task is not None:
                 asyncio.create_task(task)
 
         except Exception as e:
-            logging.error(e)
+            logging.error("Ошибка в обработчике команды от ядра: %s", e)
 
     async def _poll(self):
         while True:
@@ -72,11 +77,14 @@ class Gate:
 
     async def _order_status(self, order):
         order = await self.exchange.fetch_order(order)
-        self.core.offer(self.formatter.format(order, "order_status"))
+        message = self.formatter.format(order, "order_status")
+        self.logger.info("Отправка ордера ядру: %s", json.dumps(message))
+        self.core.offer(message)
 
     async def _get_balances(self, parts):
         balance = await self.exchange.fetch_partial_balances(parts)
         message = self.formatter.format(balance, "balances")
+        self.logger.info("Отправка баланса ядру: %s", json.dumps(message))
         self.core.offer(message)
 
     async def _watch_order_book(self, symbol, limit):
@@ -96,7 +104,7 @@ class Gate:
             balance = await self.exchange.watch_balance()
             balance = {part: balance[part] for part in self.assets}
             message = self.formatter.format(balance, "balances")
-            self.logger.info(json.dumps(message))
+            self.logger.info("Отправка баланса ядру: %s", json.dumps(message))
             self.core.offer(message)
 
     async def _watch_orders(self) -> None:
@@ -113,29 +121,24 @@ class Gate:
                         action = "order_status"
 
                 message = self.formatter.format(order, action)
-                self.logger.info(json.dumps(message))
+                self.logger.info("Отправка ордера ядру: %s", json.dumps(message))
                 self.core.offer(message)
 
     async def _ping(self):
         while True:
             message = self.formatter.format(self.data, "ping")
-            self.logger.info(json.dumps(message))
+            self.logger.info("Пинг: %s", json.dumps(message))
             await asyncio.sleep(self.ping_delay)
 
     async def run(self):
-        while True:
-            try:
-                tasks = [
-                    self._poll(),
-                    self._watch_order_books(),
-                    self._watch_balance(),
-                    self._watch_orders(),
-                    self._ping(),
-                ]
-                await asyncio.gather(*tasks)
-
-            except Exception as e:
-                logging.error(e)
+        tasks = [
+            self._poll(),
+            self._watch_order_books(),
+            self._watch_balance(),
+            self._watch_orders(),
+            self._ping(),
+        ]
+        await asyncio.gather(*tasks)
 
     async def close(self):
         await self.exchange.close()
