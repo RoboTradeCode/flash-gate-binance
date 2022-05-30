@@ -78,13 +78,15 @@ class Gate:
     async def _order_status(self, order):
         order = await self.exchange.fetch_order(order)
         message = self.formatter.format(order, "order_status")
-        self.logger.info("Отправка ордера ядру: %s", json.dumps(message))
+        logging.info("Отправка ордера ядру")
+        self.logger.info(json.dumps(message))
         self.core.offer(message)
 
     async def _get_balances(self, parts):
         balance = await self.exchange.fetch_partial_balances(parts)
         message = self.formatter.format(balance, "balances")
-        self.logger.info("Отправка баланса ядру: %s", json.dumps(message))
+        logging.info("Отправка баланса ядру")
+        self.logger.info(json.dumps(message))
         self.core.offer(message)
 
     async def _watch_order_book(self, symbol, limit):
@@ -104,7 +106,8 @@ class Gate:
             balance = await self.exchange.watch_balance()
             balance = {part: balance[part] for part in self.assets}
             message = self.formatter.format(balance, "balances")
-            self.logger.info("Отправка баланса ядру: %s", json.dumps(message))
+            logging.info("Отправка баланса ядру")
+            self.logger.info(json.dumps(message))
             self.core.offer(message)
 
     async def _watch_orders(self) -> None:
@@ -121,13 +124,15 @@ class Gate:
                         action = "order_status"
 
                 message = self.formatter.format(order, action)
-                self.logger.info("Отправка ордера ядру: %s", json.dumps(message))
+                logging.info("Отправка ордера ядру")
+                self.logger.info(json.dumps(message))
                 self.core.offer(message)
 
     async def _ping(self):
         while True:
             message = self.formatter.format(self.data, "ping")
-            self.logger.info("Пинг: %s", json.dumps(message))
+            logging.info("Пинг")
+            self.logger.info(json.dumps(message))
             await asyncio.sleep(self.ping_delay)
 
     async def run(self):
