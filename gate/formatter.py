@@ -17,7 +17,7 @@ class Formatter:
             "instance": self.instance,
             "message": None,
             "algo": self.algo,
-            "timestamp": int(datetime.now().timestamp()),
+            "timestamp": int(datetime.now().timestamp() * 1000000),
         }
 
     def format(self, data, action: str, symbol: str = None):
