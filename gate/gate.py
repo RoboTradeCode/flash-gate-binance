@@ -104,7 +104,8 @@ class Gate:
     async def _watch_balance(self) -> None:
         while True:
             balance = await self.exchange.watch_balance()
-            balance = {part: balance[part] for part in self.assets}
+            default_balance = {"free": 0, "used": 0, "total": 0}
+            balance = {part: balance.get(part, default_balance) for part in self.assets}
             message = self.formatter.format(balance, "balances")
             logging.info("Отправка баланса ядру")
             self.logger.info(json.dumps(message))

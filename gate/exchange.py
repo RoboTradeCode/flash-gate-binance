@@ -73,7 +73,8 @@ class Exchange:
         #     "USDT"
         # ]
         balance = await self.exchange.fetch_balance()
-        return {part: balance[part] for part in parts}
+        default_balance = {"free": 0, "used": 0, "total": 0}
+        return {part: balance.get(part, default_balance) for part in parts}
 
     async def watch_order_book(self, symbols, limit):
         return await self.exchange.watch_order_book(symbols, limit)
