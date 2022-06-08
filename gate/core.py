@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import Callable
 from aeron import (
     Subscriber,

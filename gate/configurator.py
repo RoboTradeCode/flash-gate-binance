@@ -21,7 +21,7 @@ class Configurator:
     async def get_config(self, only_new: bool = False) -> dict:
         params = {"only_new": "true" if only_new else "false"}
         async with self.session.get(self.method, params=params) as response:
-            logging.info("Configurator: %s", await response.text())
+            logging.info("Received configuration: %s", await response.text())
             return await response.json()
 
     async def close(self):
