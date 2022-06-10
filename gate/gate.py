@@ -43,6 +43,10 @@ class Gate:
             logging.info("Received message from core: %s", message)
             message = json.loads(message)
 
+            log_message = dict(message)
+            log_message["node"] = "gate"
+            self.logger.info(json.dumps(log_message))
+
             match message:
                 case {"event": "command", "action": "create_order"}:
                     logging.info("Creating orders: %s", message["data"])
