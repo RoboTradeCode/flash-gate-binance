@@ -2,18 +2,19 @@ import asyncio
 from asyncio import get_running_loop
 from typing import Type
 import ccxtpro
-from ccxtpro import okx
+from ccxtpro import Exchange as BaseExchange
 
 
 class Exchange:
     def __init__(self, exchange_id: str, sandbox_mode: bool = False, **kwargs):
-        exchange_class: Type[okx] = getattr(ccxtpro, exchange_id)
+        exchange_class: Type[BaseExchange] = getattr(ccxtpro, exchange_id)
         exchange_config = {
             **kwargs,
             "asyncio_loop": get_running_loop(),
             "enableRateLimit": False,
         }
 
+        self.exchange_id = exchange_id
         self.exchange = exchange_class(exchange_config)
         self.exchange.set_sandbox_mode(sandbox_mode)
         self.exchange.check_required_credentials()
@@ -81,13 +82,24 @@ class Exchange:
         return {part: balance.get(part, default_balance) for part in parts}
 
     async def watch_order_book(self, symbols, limit):
+        if self.exchange_id == "kuna":
+            await asyncio.sleep(0.25)
+            return self.exchange.fetch_order_book(symbols, limit)
+
         return await self.exchange.watch_order_book(symbols, limit)
 
     async def watch_balance(self):
+        if self.exchange_id == "kuna":
+            await asyncio.sleep(0.25)
+            return self.exchange.fetch_balance()
+
         return await self.exchange.watch_balance()
 
     async def watch_orders(self):
-        return await self.exchange.watch_orders()
+        if self.exchange_id == "kuna":
+            return
+
+        return await self.exchange.watch_orders("BTC")
 
     async def close(self):
         await self.exchange.close()
