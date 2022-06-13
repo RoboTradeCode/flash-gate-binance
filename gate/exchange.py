@@ -8,7 +8,11 @@ from ccxtpro import okx
 class Exchange:
     def __init__(self, exchange_id: str, sandbox_mode: bool = False, **kwargs):
         exchange_class: Type[okx] = getattr(ccxtpro, exchange_id)
-        exchange_config = {**kwargs, "asyncio_loop": get_running_loop()}
+        exchange_config = {
+            **kwargs,
+            "asyncio_loop": get_running_loop(),
+            "enableRateLimit": False,
+        }
 
         self.exchange = exchange_class(exchange_config)
         self.exchange.set_sandbox_mode(sandbox_mode)
