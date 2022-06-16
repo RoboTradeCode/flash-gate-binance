@@ -17,9 +17,6 @@ class Gate:
         gate_config = config["data"]["configs"]["gate_config"]
         aeron_handler = AeronHandler(**gate_config["aeron"]["publishers"]["logs"])
 
-        self.exchange = Exchange(
-            gate_config["info"]["exchange"], sandbox_mode, **gate_config["account"]
-        )
         self.formatter = Formatter(config)
         self.core = Core(gate_config["aeron"], self._core_handler)
         self.idle_strategy = AsyncSleepingIdleStrategy(IDLE_SLEEP_MS)
@@ -31,6 +28,13 @@ class Gate:
         self.depth: int = gate_config["info"]["depth"]
         self.data = 0
         self.ping_delay = gate_config["info"]["ping_delay"]
+
+        self.exchange = Exchange(
+            gate_config["info"]["exchange"],
+            self.symbols,
+            sandbox_mode,
+            **gate_config["account"]
+        )
 
     async def __aenter__(self):
         return self
@@ -50,15 +54,15 @@ class Gate:
             match message:
                 case {"event": "command", "action": "create_order"}:
                     logging.info("Creating orders: %s", message["data"])
-                    task = self.exchange.create_orders(message["data"])
+                    task = self.create_orders(message["data"])
 
                 case {"event": "command", "action": "cancel_order"}:
                     logging.info("Cancelling order: %s", message["data"])
-                    task = self.exchange.cancel_orders(message["data"])
+                    task = self.cancel_orders(message["data"])
 
                 case {"event": "command", "action": "cancel_all_orders"}:
                     logging.info("Cancelling all orders")
-                    task = self.exchange.cancel_all_orders()
+                    task = self.cancel_all_orders()
 
                 case {"event": "command", "action": "order_status"}:
                     logging.info("Getting order status: %s", message["data"])
@@ -83,8 +87,65 @@ class Gate:
             fragments_read = self.core.poll()
             await self.idle_strategy.idle(fragments_read)
 
+    async def create_orders(self, orders):
+        orders = await self.exchange.create_orders(orders)
+        logging.info("Received orders from exchange: %s", orders)
+
+        for order in orders:
+            match order["status"]:
+                case "open":
+                    action = "order_created"
+                case "closed":
+                    action = "order_closed"
+                case _:
+                    action = "order_status"
+
+            message = self.formatter.format(order, action)
+            logging.info("Sending order to core: %s", message)
+            self.logger.info(json.dumps(message))
+
+            self.core.offer(message)
+
+    async def cancel_orders(self, orders):
+        orders = await self.exchange.cancel_orders(orders)
+        logging.info("Received orders from exchange: %s", orders)
+
+        for order in orders:
+            match order["status"]:
+                case "open":
+                    action = "order_created"
+                case "closed":
+                    action = "order_closed"
+                case _:
+                    action = "order_status"
+
+            message = self.formatter.format(order, action)
+            logging.info("Sending order to core: %s", message)
+            self.logger.info(json.dumps(message))
+
+            self.core.offer(message)
+
+    async def cancel_all_orders(self):
+        orders = await self.exchange.cancel_all_orders()
+        logging.info("Received orders from exchange: %s", orders)
+
+        for order in orders:
+            match order["status"]:
+                case "open":
+                    action = "order_created"
+                case "closed":
+                    action = "order_closed"
+                case _:
+                    action = "order_status"
+
+            message = self.formatter.format(order, action)
+            logging.info("Sending order to core: %s", message)
+            self.logger.info(json.dumps(message))
+
+            self.core.offer(message)
+
     async def _order_status(self, order):
-        order = await self.exchange.fetch_order(order)
+        order = await self.exchange.get_order(order)
         logging.info("Received order from exchange: %s", order)
 
         message = self.formatter.format(order, "order_status")
@@ -94,7 +155,9 @@ class Gate:
         self.core.offer(message)
 
     async def _get_balances(self, parts):
-        balance = await self.exchange.fetch_partial_balances(parts)
+        balance = await self.exchange.get_balance()
+        default_balance = {"free": 0.0, "used": 0.0, "total": 0.0}
+        balance = {part: balance.get(part, default_balance) for part in parts}
         logging.info("Received balance from exchange: %s", balance)
 
         message = self.formatter.format(balance, "balances")
@@ -105,7 +168,7 @@ class Gate:
 
     async def _watch_order_book(self, symbol, limit):
         while True:
-            orderbook = await self.exchange.watch_order_book(symbol, limit)
+            orderbook = await self.exchange.get_order_book(symbol, limit)
             self.data += 1
 
             message = self.formatter.format(orderbook, "orderbook", symbol)
@@ -117,7 +180,7 @@ class Gate:
 
     async def _watch_balance(self) -> None:
         while True:
-            balance = await self.exchange.watch_balance()
+            balance = await self.exchange.get_balance()
             default_balance = {"free": 0.0, "used": 0.0, "total": 0.0}
             balance = {part: balance.get(part, default_balance) for part in self.assets}
             logging.info("Received balance from exchange: %s", balance)
@@ -130,7 +193,7 @@ class Gate:
 
     async def _watch_orders(self) -> None:
         while True:
-            orders = await self.exchange.watch_orders()
+            orders = await self.exchange.get_orders()
             logging.info("Received orders from exchange: %s", orders)
 
             for order in orders:

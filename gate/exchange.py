@@ -3,15 +3,20 @@ from asyncio import get_running_loop
 from typing import Type
 import ccxtpro
 from ccxtpro import Exchange as BaseExchange
+import itertools
+from .custom_types import Order, PendingOrder
 
 
 class Exchange:
-    def __init__(self, exchange_id: str, sandbox_mode: bool = False, **kwargs):
+    def __init__(
+        self, exchange_id: str, symbols: list[str], sandbox_mode: bool = False, **kwargs
+    ):
+        # TODO: Refactor this
         exchange_class: Type[BaseExchange] = getattr(ccxtpro, exchange_id)
         exchange_config = {
             **kwargs,
             "asyncio_loop": get_running_loop(),
-            "enableRateLimit": False,
+            "enableRateLimit": True,
         }
 
         self.exchange_id = exchange_id
@@ -19,87 +24,72 @@ class Exchange:
         self.exchange.set_sandbox_mode(sandbox_mode)
         self.exchange.check_required_credentials()
 
+        self.symbols = symbols
+
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    async def create_orders(self, orders: list[dict[str, str | float]]):
-        # [
-        #     {
-        #         "symbol": "BTC/USDT",
-        #         "type": "limit",
-        #         "side": "sell",
-        #         "price": 41500.34,
-        #         "amount": 0.023
-        #     },
-        #     {
-        #         "symbol": "ETH/USDT",
-        #         "type": "limit",
-        #         "side": "sell",
-        #         "price": 41500.34,
-        #         "amount": 0.023
-        #     }
-        # ]
-        tasks = [self.exchange.create_order(**order) for order in orders]
-        await asyncio.gather(*tasks)
+    async def get_order_book(self, symbols: list[str], limit: int):
+        if self.exchange.has.get("watchOrderBook"):
+            order_book = await self.exchange.watch_order_book(symbols, limit)
+        elif self.exchange.has.get("fetchOrderBook"):
+            order_book = await self.exchange.fetch_order_book(symbols, limit)
+        else:
+            raise NotImplementedError
 
-    async def cancel_orders(self, orders: list[dict[str, str]]):
-        # [
-        #     {
-        #         "id": "86579506507056097",
-        #         "symbol": "BTC/USDT"
-        #     },
-        #     {
-        #         "id": "86579506507056044",
-        #         "symbol": "ETH/USDT"
-        #     }
-        # ]
-        tasks = [self.exchange.cancel_order(**order) for order in orders]
-        await asyncio.gather(*tasks)
+        return order_book
+
+    async def get_balance(self):
+        if self.exchange.has.get("watchBalance"):
+            balance = await self.exchange.watch_balance()
+        elif self.exchange.has.get("fetchBalance"):
+            balance = await self.exchange.fetch_balance()
+        else:
+            raise NotImplementedError
+
+        return balance
+
+    async def get_order(self, order: Order):
+        return await self.exchange.fetch_order(order["id"], order["symbol"])
+
+    async def get_orders(self):
+        if self.exchange.has.get("watchOrders"):
+            orders = await self.exchange.watch_orders()
+        elif self.exchange.has.get("fetchOpenOrders"):
+            tasks = [self.exchange.fetch_open_orders(symbol) for symbol in self.symbols]
+            results = await asyncio.gather(*tasks)
+            return list(itertools.chain.from_iterable(results))
+        else:
+            raise NotImplementedError
+
+        return orders
+
+    async def create_order(self, order: PendingOrder):
+        return await self.exchange.create_order(
+            order["symbol"],
+            order["type"],
+            order["side"],
+            order["amount"],
+            order["price"],
+        )
+
+    async def create_orders(self, orders: list[PendingOrder]):
+        tasks = [self.create_order(order) for order in orders]
+        return await asyncio.gather(*tasks)
+
+    async def cancel_order(self, order):
+        return await self.exchange.cancel_order(order["id"], order["symbol"])
+
+    async def cancel_orders(self, orders):
+        tasks = [self.cancel_order(order) for order in orders]
+        return await asyncio.gather(*tasks)
 
     async def cancel_all_orders(self):
-        orders = await self.exchange.fetch_open_orders()
-        orders = [{arg: order[arg] for arg in ["id", "symbol"]} for order in orders]
-        await self.cancel_orders(orders)
-
-    async def fetch_order(self, order: dict[str, str]):
-        # {
-        #     "id": "86579506507056097",
-        #     "symbol": "BTC/USDT"
-        # }
-        return await self.exchange.fetch_order(**order)
-
-    async def fetch_partial_balances(self, parts: list[str]):
-        # [
-        #     "BTC",
-        #     "ETH",
-        #     "USDT"
-        # ]
-        balance = await self.exchange.fetch_balance()
-        default_balance = {"free": 0.0, "used": 0.0, "total": 0.0}
-        return {part: balance.get(part, default_balance) for part in parts}
-
-    async def watch_order_book(self, symbols, limit):
-        if self.exchange_id == "kuna":
-            await asyncio.sleep(0.25)
-            return self.exchange.fetch_order_book(symbols, limit)
-
-        return await self.exchange.watch_order_book(symbols, limit)
-
-    async def watch_balance(self):
-        if self.exchange_id == "kuna":
-            await asyncio.sleep(0.25)
-            return self.exchange.fetch_balance()
-
-        return await self.exchange.watch_balance()
-
-    async def watch_orders(self):
-        if self.exchange_id == "kuna":
-            return
-
-        return await self.exchange.watch_orders("BTC")
+        orders = await self.get_orders()
+        return await self.cancel_orders(orders)
 
     async def close(self):
         await self.exchange.close()
