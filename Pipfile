@@ -4,8 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-aeron = {ref = "v0.3.1", git = "ssh://git@github.com/RoboTradeCode/aeron-python.git"}
-ccxtpro = {subdirectory = "python", git = "ssh://git@github.com/kroitor/ccxt.pro.git"}
 aiohttp = "*"
 
 [dev-packages]
