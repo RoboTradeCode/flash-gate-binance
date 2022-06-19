@@ -9,12 +9,18 @@ from .custom_types import Order, PendingOrder
 
 class Exchange:
     def __init__(
-        self, exchange_id: str, symbols: list[str], sandbox_mode: bool = False, **kwargs
+        self,
+        exchange_id: str,
+        symbols: list[str],
+        sandbox_mode: bool = False,
+        api_key: str = None,
+        secret_key: str = None,
     ):
         # TODO: Refactor this
         exchange_class: Type[BaseExchange] = getattr(ccxtpro, exchange_id)
         exchange_config = {
-            **kwargs,
+            "apiKey": api_key,
+            "secret": secret_key,
             "asyncio_loop": get_running_loop(),
             "enableRateLimit": True,
         }
