@@ -12,11 +12,13 @@ class AeronHandler(Handler):
         self.publication = Publisher(channel, stream_id)
 
     def emit(self, record: LogRecord):
+        message = record.getMessage()
         successful = False
 
+        # TODO: Переместить в отдельный модуль, добавить Timeout
         while not successful:
             try:
-                self.publication.offer(record.msg)
+                self.publication.offer(message)
                 successful = True
 
             except AeronPublicationNotConnectedError:
