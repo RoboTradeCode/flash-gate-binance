@@ -13,6 +13,7 @@ class Exchange:
         exchange_id: str,
         symbols: list[str],
         sandbox_mode: bool = False,
+        enable_rate_limit: bool = True,
         api_key: str = None,
         secret_key: str = None,
     ):
@@ -22,7 +23,7 @@ class Exchange:
             "apiKey": api_key,
             "secret": secret_key,
             "asyncio_loop": get_running_loop(),
-            "enableRateLimit": True,
+            "enableRateLimit": enable_rate_limit,
         }
 
         self.exchange_id = exchange_id

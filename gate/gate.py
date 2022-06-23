@@ -29,10 +29,13 @@ class Gate:
         self.data = 0
         self.ping_delay = gate_config["info"]["ping_delay"]
 
+        self.subscribe_timeout = gate_config["rate_limits"]["subscribe_timeout"]
+
         self.exchange = Exchange(
             gate_config["info"]["exchange"],
             self.symbols,
             sandbox_mode,
+            gate_config["rate_limits"]["enable_ccxt_rate_limiter"],
             **gate_config["account"]
         )
 
@@ -167,6 +170,7 @@ class Gate:
         self.core.offer(message)
 
     async def _watch_order_book(self, symbol, limit):
+        await asyncio.sleep(self.subscribe_timeout)
         while True:
             orderbook = await self.exchange.get_order_book(symbol, limit)
             self.data += 1
