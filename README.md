@@ -1,13 +1,19 @@
-[![OKX](https://user-images.githubusercontent.com/44947427/166470904-b9810b07-520b-421f-b180-1d33fed8cd6a.png)](https://www.okx.com)
+<a href="https://www.okx.com">
+    <img alt="OKX" src="https://user-images.githubusercontent.com/44947427/175785831-05075124-3cb8-4166-ae16-031c0c68dcd9.png">
+</a>
+<a href="https://kuna.io">
+    <img alt="Kuna" height="48" src="https://user-images.githubusercontent.com/44947427/175785516-e1bbd230-535a-4f69-8f9f-5cd1b034ab8b.svg">
+</a>
+<a href="https://exmo.me">
+    <img alt="EXMO" height="48" src="https://user-images.githubusercontent.com/44947427/175785584-6c573ba3-98f2-4942-9c2b-ebb03c963ca3.svg">
+</a>
 
-# gate-okx-python
+# Flash Gate
 
-[![Python](https://img.shields.io/badge/python-3.10-blue)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10-blue)](https://www.python.org)
 [![CPython](https://img.shields.io/badge/implementation-cpython-blue)](https://github.com/python/cpython)
 [![Linux](https://img.shields.io/badge/platform-linux-lightgrey)](https://ru.wikipedia.org/wiki/Linux)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
-Гейт [OKX](https://www.okx.com).
 
 ## Установка
 

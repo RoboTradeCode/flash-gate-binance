@@ -1,26 +1,28 @@
 import asyncio
 import logging.config
 from configparser import ConfigParser
-from gate import Gate, Configurator
+import yaml
+from flash_gate import Configurator, Gate
 
-LOGGING_FNAME = "logging.conf"
+LOGGING_FNAME = "logging.yaml"
 CONFIG_FILENAME = "config.ini"
 
 
 async def main():
-    logging.config.fileConfig(LOGGING_FNAME)
-    initial_config = ConfigParser()
-    initial_config.read(CONFIG_FILENAME)
+    with open(LOGGING_FNAME) as f:
+        d = yaml.safe_load(f)
+        logging.config.dictConfig(d)
 
-    base_url = initial_config.get("configurator", "base_url")
-    exchange = initial_config.get("configurator", "exchange")
-    instance = initial_config.get("configurator", "instance")
-    sandbox_mode = initial_config.getboolean("gate", "sandbox_mode")
+    ini = ConfigParser()
+    ini.read(CONFIG_FILENAME)
+    configurator_driver_type = ini.get("configuration", "type")
+    configurator_source = ini.get("configuration", "source")
 
-    async with Configurator(base_url, exchange, instance) as configurator:
-        config = await configurator.get_config()
+    # noinspection PyTypeChecker
+    configurator = Configurator(configurator_driver_type, configurator_source)
+    config = await configurator.get_config()
 
-    async with Gate(config, sandbox_mode) as gate:
+    async with Gate(config) as gate:
         await gate.run()
 
 
