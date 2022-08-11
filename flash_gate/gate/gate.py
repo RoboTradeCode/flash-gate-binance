@@ -252,29 +252,28 @@ class Gate:
                 await self._get_order(order)
 
     async def _get_order(self, order):
-        async with self.lock:
-            try:
-                order["id"] = self._get_id_by_client_order_id(order["client_order_id"])
-                order = await self.exchange.fetch_order(order)
+        try:
+            order["id"] = self._get_id_by_client_order_id(order["client_order_id"])
+            order = await self.exchange.fetch_order(order)
 
-                event: Event = {
-                    "event_id": self.event_id_by_client_order_id.get(
-                        order["client_order_id"]
-                    ),
-                    "action": EventAction.GET_ORDERS,
-                    "data": [order],
-                }
-                self.transmitter.offer(event, Destination.CORE)
-                self.transmitter.offer(event, Destination.LOGS)
-            except Exception as e:
-                self.logger.error(e)
-                log_event: Event = {
-                    "event_id": str(uuid.uuid4()),
-                    "event": EventType.ERROR,
-                    "action": EventAction.GET_ORDERS,
-                    "data": str(e),
-                }
-                self.transmitter.offer(log_event, Destination.LOGS)
+            event: Event = {
+                "event_id": self.event_id_by_client_order_id.get(
+                    order["client_order_id"]
+                ),
+                "action": EventAction.GET_ORDERS,
+                "data": [order],
+            }
+            self.transmitter.offer(event, Destination.CORE)
+            self.transmitter.offer(event, Destination.LOGS)
+        except Exception as e:
+            self.logger.error(e)
+            log_event: Event = {
+                "event_id": str(uuid.uuid4()),
+                "event": EventType.ERROR,
+                "action": EventAction.GET_ORDERS,
+                "data": str(e),
+            }
+            self.transmitter.offer(log_event, Destination.LOGS)
 
     async def _get_balance(self, event: Event) -> None:
         async with self.lock:
