@@ -199,6 +199,17 @@ class Gate:
                     )
                 await self.exchange.cancel_orders(orders)
 
+            except Exception as e:
+                self.logger.error(e)
+                log_event: Event = {
+                    "event_id": str(uuid.uuid4()),
+                    "event": EventType.ERROR,
+                    "action": EventAction.CANCEL_ORDERS,
+                    "data": str(e),
+                }
+                self.transmitter.offer(log_event, Destination.LOGS)
+
+            try:
                 orders: list[FetchOrderParams] = []
                 for order in event["data"]:
                     orders.append(
