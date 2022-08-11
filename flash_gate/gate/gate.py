@@ -75,11 +75,10 @@ class Gate:
         ]
 
     def _handler(self, message: str) -> None:
-        async with self.lock:
-            self.logger.info("Received message: %s", message)
-            event = self._deserialize_message(message)
-            task = self._get_task(event)
-            await asyncio.create_task(task)
+        self.logger.info("Received message: %s", message)
+        event = self._deserialize_message(message)
+        task = self._get_task(event)
+        asyncio.create_task(task)
 
     def _deserialize_message(self, message: str) -> Event:
         try:
@@ -186,7 +185,45 @@ class Gate:
         return [order["client_order_id"] for order in orders]
 
     async def _cancel_orders(self, event: Event) -> None:
-        try:
+        async with self.lock:
+            try:
+                orders: list[FetchOrderParams] = []
+                for order in event["data"]:
+                    orders.append(
+                        {
+                            "id": self._get_id_by_client_order_id(
+                                order["client_order_id"]
+                            ),
+                            "symbol": order["symbol"],
+                        }
+                    )
+                await self.exchange.cancel_orders(orders)
+            except Exception as e:
+                self.logger.error(e)
+                log_event: Event = {
+                    "event_id": str(uuid.uuid4()),
+                    "event": EventType.ERROR,
+                    "action": EventAction.CANCEL_ORDERS,
+                    "data": str(e),
+                }
+                self.transmitter.offer(log_event, Destination.LOGS)
+
+    async def _cancel_all_orders(self) -> None:
+        async with self.lock:
+            try:
+                await self.exchange.cancel_all_orders(self.tickers)
+            except Exception as e:
+                self.logger.error(e)
+                log_event: Event = {
+                    "event_id": str(uuid.uuid4()),
+                    "event": EventType.ERROR,
+                    "action": EventAction.CANCEL_ALL_ORDERS,
+                    "data": str(e),
+                }
+                self.transmitter.offer(log_event, Destination.LOGS)
+
+    async def _get_orders(self, event: Event) -> None:
+        async with self.lock:
             orders: list[FetchOrderParams] = []
             for order in event["data"]:
                 orders.append(
@@ -196,79 +233,41 @@ class Gate:
                     }
                 )
 
-            async with self.lock:
-                await self.exchange.cancel_orders(orders)
-        except Exception as e:
-            self.logger.error(e)
-            log_event: Event = {
-                "event_id": str(uuid.uuid4()),
-                "event": EventType.ERROR,
-                "action": EventAction.CANCEL_ORDERS,
-                "data": str(e),
-            }
-            self.transmitter.offer(log_event, Destination.LOGS)
-
-    async def _cancel_all_orders(self) -> None:
-        try:
-            async with self.lock:
-                await self.exchange.cancel_all_orders(self.tickers)
-        except Exception as e:
-            self.logger.error(e)
-            log_event: Event = {
-                "event_id": str(uuid.uuid4()),
-                "event": EventType.ERROR,
-                "action": EventAction.CANCEL_ALL_ORDERS,
-                "data": str(e),
-            }
-            self.transmitter.offer(log_event, Destination.LOGS)
-
-    async def _get_orders(self, event: Event) -> None:
-        orders: list[FetchOrderParams] = []
-        for order in event["data"]:
-            orders.append(
-                {
-                    "id": self._get_id_by_client_order_id(order["client_order_id"]),
-                    "symbol": order["symbol"],
-                }
-            )
-
-        async with self.lock:
             for order in orders:
                 await self._get_order(order)
 
     async def _get_order(self, order):
-        try:
-            order["id"] = self._get_id_by_client_order_id(order["client_order_id"])
-            async with self.lock:
+        async with self.lock:
+            try:
+                order["id"] = self._get_id_by_client_order_id(order["client_order_id"])
                 order = await self.exchange.fetch_order(order)
 
-            event: Event = {
-                "event_id": self.event_id_by_client_order_id.get(
-                    order["client_order_id"]
-                ),
-                "action": EventAction.GET_ORDERS,
-                "data": [order],
-            }
-            self.transmitter.offer(event, Destination.CORE)
-            self.transmitter.offer(event, Destination.LOGS)
-        except Exception as e:
-            self.logger.error(e)
-            log_event: Event = {
-                "event_id": str(uuid.uuid4()),
-                "event": EventType.ERROR,
-                "action": EventAction.GET_ORDERS,
-                "data": str(e),
-            }
-            self.transmitter.offer(log_event, Destination.LOGS)
+                event: Event = {
+                    "event_id": self.event_id_by_client_order_id.get(
+                        order["client_order_id"]
+                    ),
+                    "action": EventAction.GET_ORDERS,
+                    "data": [order],
+                }
+                self.transmitter.offer(event, Destination.CORE)
+                self.transmitter.offer(event, Destination.LOGS)
+            except Exception as e:
+                self.logger.error(e)
+                log_event: Event = {
+                    "event_id": str(uuid.uuid4()),
+                    "event": EventType.ERROR,
+                    "action": EventAction.GET_ORDERS,
+                    "data": str(e),
+                }
+                self.transmitter.offer(log_event, Destination.LOGS)
 
     async def _get_balance(self, event: Event) -> None:
-        try:
-            if not (assets := event["data"]):
-                assets = self.assets
+        async with self.lock:
+            try:
+                if not (assets := event["data"]):
+                    assets = self.assets
 
-            async with self.lock:
                 balance = await self.exchange.fetch_partial_balance(assets)
-
                 event: Event = {
                     "event_id": event["event_id"],
                     "action": EventAction.GET_BALANCE,
@@ -277,15 +276,15 @@ class Gate:
                 self.transmitter.offer(event, Destination.BALANCE)
                 self.transmitter.offer(event, Destination.LOGS)
 
-        except Exception as e:
-            self.logger.exception(e)
-            log_event: Event = {
-                "event_id": str(uuid.uuid4()),
-                "event": EventType.ERROR,
-                "action": EventAction.GET_BALANCE,
-                "data": str(e),
-            }
-            self.transmitter.offer(log_event, Destination.LOGS)
+            except Exception as e:
+                self.logger.exception(e)
+                log_event: Event = {
+                    "event_id": str(uuid.uuid4()),
+                    "event": EventType.ERROR,
+                    "action": EventAction.GET_BALANCE,
+                    "data": str(e),
+                }
+                self.transmitter.offer(log_event, Destination.LOGS)
 
     async def _watch_order_books(self):
         while True:
@@ -324,14 +323,14 @@ class Gate:
 
                 async with self.lock:
                     balance = await exchange.fetch_partial_balance(self.assets)
+                    event: Event = {
+                        "event_id": str(uuid.uuid4()),
+                        "action": EventAction.BALANCE_UPDATE,
+                        "data": balance,
+                    }
+                    self.transmitter.offer(event, Destination.BALANCE)
+                    self.transmitter.offer(event, Destination.LOGS)
 
-                event: Event = {
-                    "event_id": str(uuid.uuid4()),
-                    "action": EventAction.BALANCE_UPDATE,
-                    "data": balance,
-                }
-                self.transmitter.offer(event, Destination.BALANCE)
-                self.transmitter.offer(event, Destination.LOGS)
                 await asyncio.sleep(self.balance_delay)
 
             except Exception as e:
@@ -348,47 +347,47 @@ class Gate:
         while True:
             exchange = await self.private_pool.acquire()
 
-            try:
-                orders = []
-                cp = self.tracked_orders.copy()
-                for _order in cp:
-                    params = {
-                        "id": self._get_id_by_client_order_id(_order[0]),
-                        "symbol": _order[1],
-                    }
+            async with self.lock:
+                try:
+                    orders = []
+                    cp = self.tracked_orders.copy()
+                    for _order in cp:
+                        params = {
+                            "id": self._get_id_by_client_order_id(_order[0]),
+                            "symbol": _order[1],
+                        }
 
-                    try:
-                        async with self.lock:
+                        try:
                             order = await exchange.fetch_order(params)
-                        order["client_order_id"] = _order[0]
-                        orders.append(order)
+                            order["client_order_id"] = _order[0]
+                            orders.append(order)
 
-                        if order["status"] != "open":
-                            self.tracked_orders.discard(_order)
+                            if order["status"] != "open":
+                                self.tracked_orders.discard(_order)
 
-                    except ValueError as e:
-                        print(e)
+                        except ValueError as e:
+                            print(e)
 
-                for order in orders:
-                    event: Event = {
-                        "event_id": self.event_id_by_client_order_id.get(
-                            order["client_order_id"]
-                        ),
-                        "action": EventAction.ORDERS_UPDATE,
-                        "data": [order],
+                    for order in orders:
+                        event: Event = {
+                            "event_id": self.event_id_by_client_order_id.get(
+                                order["client_order_id"]
+                            ),
+                            "action": EventAction.ORDERS_UPDATE,
+                            "data": [order],
+                        }
+                        self.transmitter.offer(event, Destination.CORE)
+                        self.transmitter.offer(event, Destination.LOGS)
+
+                except Exception as e:
+                    self.logger.error(e)
+                    log_event: Event = {
+                        "event_id": str(uuid.uuid4()),
+                        "event": EventType.ERROR,
+                        "action": EventAction.GET_BALANCE,
+                        "data": str(e),
                     }
-                    self.transmitter.offer(event, Destination.CORE)
-                    self.transmitter.offer(event, Destination.LOGS)
-
-            except Exception as e:
-                self.logger.error(e)
-                log_event: Event = {
-                    "event_id": str(uuid.uuid4()),
-                    "event": EventType.ERROR,
-                    "action": EventAction.GET_BALANCE,
-                    "data": str(e),
-                }
-                self.transmitter.offer(log_event, Destination.LOGS)
+                    self.transmitter.offer(log_event, Destination.LOGS)
 
             await asyncio.sleep(self.order_status_delay)
 
