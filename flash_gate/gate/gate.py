@@ -26,18 +26,25 @@ class Gate:
 
         self.logger = logging.getLogger(__name__)
         self.exchange = CcxtExchange(exchange_id, exchange_config)
+        self.exchange.exchange.set_sandbox_mode(config_parser.sandbox_mode)
         self.transmitter = AeronTransmitter(self._handler, config)
 
         self.data_collection_method = config_parser.data_collection_method
         self.subscribe_delay = config_parser.subscribe_delay
         self.fetch_delays = config_parser.fetch_delays
         self.tickers = config_parser.tickers
+        self.fetch_orderbooks = config_parser.fetch_orderbooks
         self.order_book_limit = config_parser.order_book_limit
         self.assets = config_parser.assets
 
         self.tracked_orders: set[tuple[str, str]] = set()
         self.event_id_by_client_order_id = bidict()
         self.order_books_received = 0
+        self.lock = asyncio.Lock()
+
+        self.order_book_delay = config_parser.order_book_delay
+        self.balance_delay = config_parser.balance_delay
+        self.order_status_delay = config_parser.order_status_delay
 
     async def run(self) -> NoReturn:
         tasks = self._get_periodical_tasks()
@@ -180,7 +187,7 @@ class Gate:
                 order_book = await self.exchange.watch_order_book(symbol, limit)
             else:
                 order_book = await self.exchange.fetch_order_book(symbol, limit)
-                await asyncio.sleep(self.fetch_delays["order_book"])
+                await asyncio.sleep(self.order_book_delay)
 
             self.order_books_received += 1
             event: Event = {
@@ -197,7 +204,7 @@ class Gate:
                 balance = await self.exchange.watch_partial_balance(self.assets)
             else:
                 balance = await self.exchange.fetch_partial_balance(self.assets)
-                await asyncio.sleep(self.fetch_delays["balance"])
+                await asyncio.sleep(self.balance_delay)
 
             event: Event = {
                 "event_id": str(uuid.uuid4()),
