@@ -75,10 +75,11 @@ class Gate:
         ]
 
     def _handler(self, message: str) -> None:
-        self.logger.info("Received message: %s", message)
-        event = self._deserialize_message(message)
-        task = self._get_task(event)
-        asyncio.create_task(task)
+        async with self.lock:
+            self.logger.info("Received message: %s", message)
+            event = self._deserialize_message(message)
+            task = self._get_task(event)
+            await asyncio.create_task(task)
 
     def _deserialize_message(self, message: str) -> Event:
         try:
