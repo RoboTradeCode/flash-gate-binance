@@ -33,6 +33,24 @@ class ConfigParser:
         return exchange_config
 
     @property
+    def sandbox_mode(self) -> bool:
+        gate_config = self._gate_config
+        return gate_config["exchange"]["is_test_keys"]
+
+    @property
+    def fetch_orderbooks(self) -> bool:
+        fetch_orderbooks = self._rate_limits["fetch_orderbooks"]
+        return fetch_orderbooks
+
+    @property
+    def public_config(self) -> dict:
+        exchange_config = {
+            "enableRateLimit": self._rate_limits["enable_ccxt_rate_limiter"],
+            "session": False,
+        }
+        return exchange_config
+
+    @property
     def aeron_config(self) -> dict:
         aeron_config: dict = self._gate_config["aeron"]
         # После добавления поля решили, что отсутствие подписчика не является ошибкой
@@ -51,11 +69,6 @@ class ConfigParser:
         return subscribe_delay
 
     @property
-    def fetch_delays(self) -> dict:
-        fetch_delays = self._rate_limits["api_request_timeouts"]
-        return fetch_delays
-
-    @property
     def tickers(self) -> list[str]:
         markets = self.config["data"]["markets"]
         tickers = [market["common_symbol"] for market in markets]
@@ -71,3 +84,26 @@ class ConfigParser:
         assets_labels = self.config["data"]["assets_labels"]
         assets = [asset_label["common"] for asset_label in assets_labels]
         return assets
+
+    @property
+    def api_requests_per_seconds(self) -> dict:
+        api_requests_per_seconds = self._rate_limits["api_requests_per_seconds"]
+        return api_requests_per_seconds
+
+    @property
+    def order_book_delay(self) -> float:
+        rps = self.api_requests_per_seconds["public"]["order_book"]
+        order_book_delay = 1 / rps
+        return order_book_delay
+
+    @property
+    def balance_delay(self) -> float:
+        rps = self.api_requests_per_seconds["private"]["balance"]
+        balance_delay = 1 / rps
+        return balance_delay
+
+    @property
+    def order_status_delay(self) -> float:
+        rps = self.api_requests_per_seconds["private"]["order_status"]
+        order_status_delay = 1 / rps
+        return order_status_delay
