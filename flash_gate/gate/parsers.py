@@ -69,6 +69,11 @@ class ConfigParser:
         return subscribe_delay
 
     @property
+    def fetch_delays(self) -> dict:
+        fetch_delays = self._rate_limits["api_requests_per_seconds"]
+        return fetch_delays
+
+    @property
     def tickers(self) -> list[str]:
         markets = self.config["data"]["markets"]
         tickers = [market["common_symbol"] for market in markets]
@@ -89,6 +94,41 @@ class ConfigParser:
     def api_requests_per_seconds(self) -> dict:
         api_requests_per_seconds = self._rate_limits["api_requests_per_seconds"]
         return api_requests_per_seconds
+
+    @property
+    def public_ip(self) -> list[str]:
+        public_ip = self.api_requests_per_seconds["public"]["ip_list"]
+
+        if self.check_intersection(public_ip, self.private_ip):
+            raise ValueError("Пересечение пулов IP-адресов")
+
+        return public_ip
+
+    def check_intersection(self, public, private):
+        public = set(public)
+        private = set(private)
+
+        if len(private) == 1 and len(public) == 1 and public == private:
+            return False
+
+        return len(public & private) != 0
+
+    @property
+    def private_ip(self) -> list[str]:
+        private_ip = self.api_requests_per_seconds["private"]["ip_list"]
+        return private_ip
+
+    @property
+    def public_delay(self) -> float:
+        rps = self.api_requests_per_seconds["public"]["exchange_rps_limit"]
+        public_delay = 1 / rps
+        return public_delay
+
+    @property
+    def private_delay(self) -> float:
+        rps = self.api_requests_per_seconds["private"]["exchange_rps_limit"]
+        private_delay = 1 / rps
+        return private_delay
 
     @property
     def order_book_delay(self) -> float:

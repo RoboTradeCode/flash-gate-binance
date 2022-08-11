@@ -27,7 +27,7 @@ class Order(TypedDict):
 
 
 class FetchOrderParams(TypedDict):
-    client_order_id: str
+    id: str
     symbol: str
 
 

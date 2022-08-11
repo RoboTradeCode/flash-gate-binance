@@ -1,12 +1,12 @@
-import asyncio
+import time
 import itertools
 import logging
 from abc import ABC, abstractmethod
 import ccxtpro
-from bidict import bidict
 from .enums import StructureType
 from .formatters import CcxtFormatterFactory
 from .types import OrderBook, Balance, Order, FetchOrderParams, CreateOrderParams
+from .nonce import Nonce
 
 
 class Exchange(ABC):
@@ -111,7 +111,11 @@ class CcxtExchange(Exchange):
     def __init__(self, exchange_id: str, config: dict):
         self.logger = logging.getLogger(__name__)
         self.exchange: ccxtpro.Exchange = getattr(ccxtpro, exchange_id)(config)
-        self.id_by_client_order_id = bidict()
+        self.exchange.nonce = self.nonce
+
+    @staticmethod
+    def nonce():
+        return Nonce.get()
 
     async def fetch_order_book(self, symbol: str, limit: int) -> OrderBook:
         self.logger.info("Trying to fetch order book: %s", symbol)
@@ -123,6 +127,25 @@ class CcxtExchange(Exchange):
         raw_order_book = await self.exchange.fetch_order_book(symbol, limit)
         order_book = self._format(raw_order_book, StructureType.ORDER_BOOK)
         return order_book
+
+    async def fetch_order_books(
+        self, symbols: list[str], limit: int
+    ) -> list[OrderBook]:
+        self.logger.info("Trying to fetch order books: %s", symbols)
+        order_book = await self._fetch_order_books(symbols, limit)
+        self.logger.info("Order book has been successfully fetched: %s", order_book)
+        return order_book
+
+    async def _fetch_order_books(
+        self, symbols: list[str], limit: int
+    ) -> list[OrderBook]:
+        raw_order_books = await self.exchange.fetch_order_books(symbols, limit)
+        order_books = []
+        for symbol in symbols:
+            order_book = self._format(raw_order_books[symbol], StructureType.ORDER_BOOK)
+            order_books.append(order_book)
+
+        return order_books
 
     async def watch_order_book(self, symbol: str, limit: int) -> OrderBook:
         self.logger.debug("Trying to watch order book: %s", symbol)
@@ -172,11 +195,8 @@ class CcxtExchange(Exchange):
         return order
 
     async def _fetch_order(self, params: FetchOrderParams) -> Order:
-        order_id = self._get_id_by_client_order_id(params["client_order_id"])
-
         try:
-            raw_order = await self.exchange.fetch_order(order_id, params["symbol"])
-            raw_order = self._update_client_order_id(raw_order)
+            raw_order = await self.exchange.fetch_order(params["id"], params["symbol"])
             order = self._format(raw_order, StructureType.ORDER)
             return order
         except ccxtpro.OrderNotFound:
@@ -188,15 +208,13 @@ class CcxtExchange(Exchange):
     async def _fetch_order_from_open(self, params: FetchOrderParams) -> Order:
         open_orders = await self.fetch_open_orders([params["symbol"]])
         for order in open_orders:
-            if order["client_order_id"] == params["client_order_id"]:
+            if order["id"] == params["id"]:
                 return order
 
     async def _fetch_order_from_canceled(self, params: FetchOrderParams) -> Order:
-        order_id = self._get_id_by_client_order_id(params["client_order_id"])
         raw_orders = await self.exchange.fetch_canceled_orders(params["symbol"])
         for raw_order in raw_orders:
-            if raw_order["id"] == order_id:
-                raw_order = self._update_client_order_id(raw_order)
+            if raw_order["id"] == params["id"]:
                 raw_order["status"] = "canceled"
                 order = self._format(raw_order, StructureType.ORDER)
                 return order
@@ -209,7 +227,6 @@ class CcxtExchange(Exchange):
 
     async def _fetch_open_orders(self, symbols: list[str]) -> list[Order]:
         raw_orders = await self._fetch_raw_open_orders(symbols)
-        raw_orders = [self._update_client_order_id(order) for order in raw_orders]
         orders = [self._format(order, StructureType.ORDER) for order in raw_orders]
         return orders
 
@@ -221,7 +238,6 @@ class CcxtExchange(Exchange):
 
     async def _watch_orders(self) -> list[Order]:
         raw_orders = await self.exchange.watch_orders()
-        raw_orders = [self._update_client_order_id(order) for order in raw_orders]
         orders = [self._format(order, StructureType.ORDER) for order in raw_orders]
         return orders
 
@@ -236,10 +252,6 @@ class CcxtExchange(Exchange):
         for order in orders:
             created_order = await self._create_order(order)
             created_orders.append(created_order)
-
-            # Задержка для биржы Exmo
-            # Чтобы новый nonce отличался от предыдущего
-            await asyncio.sleep(1e-3)
         return created_orders
 
     async def _create_order(self, params: CreateOrderParams) -> Order:
@@ -251,26 +263,9 @@ class CcxtExchange(Exchange):
             params["amount"],
             params["price"] if params["type"] != "market" else 0,
         )
-        self.id_by_client_order_id[params["client_order_id"]] = raw_order["id"]
-        raw_order = self._update_client_order_id(raw_order)
         order = self._format(raw_order, StructureType.ORDER)
         self.logger.info("Order has been successfully created: %s", order)
         return order
-
-    def _update_client_order_id(self, raw_order: dict) -> dict:
-        raw_order = raw_order.copy()
-        raw_order["clientOrderId"] = self._get_client_order_id_by_id(raw_order["id"])
-        return raw_order
-
-    def _get_id_by_client_order_id(self, client_order_id: str) -> str:
-        if order_id := self.id_by_client_order_id.get(client_order_id):
-            return order_id
-        raise ValueError(f"Unknown client order id: {client_order_id}")
-
-    def _get_client_order_id_by_id(self, order_id: str) -> str:
-        if client_order_id := self.id_by_client_order_id.inverse.get(order_id):
-            return client_order_id
-        raise ValueError(f"Unknown order id: {order_id}")
 
     async def cancel_orders(self, orders: list[FetchOrderParams]) -> None:
         self.logger.info("Trying to cancel orders: %s", orders)
@@ -282,8 +277,7 @@ class CcxtExchange(Exchange):
             await self._cancel_order(order)
 
     async def _cancel_order(self, order: FetchOrderParams) -> None:
-        order_id = self.id_by_client_order_id[order["client_order_id"]]
-        await self.exchange.cancel_order(order_id, order["symbol"])
+        await self.exchange.cancel_order(order["id"], order["symbol"])
 
     async def cancel_all_orders(self, symbols: list[str]) -> None:
         self.logger.info("Trying to cancel all orders: %s", symbols)
