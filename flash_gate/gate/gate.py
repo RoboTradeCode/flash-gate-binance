@@ -198,6 +198,21 @@ class Gate:
                         }
                     )
                 await self.exchange.cancel_orders(orders)
+
+                orders: list[FetchOrderParams] = []
+                for order in event["data"]:
+                    orders.append(
+                        {
+                            "id": self._get_id_by_client_order_id(
+                                order["client_order_id"]
+                            ),
+                            "symbol": order["symbol"],
+                        }
+                    )
+
+                for order in orders:
+                    await self._get_order(order)
+
             except Exception as e:
                 self.logger.error(e)
                 log_event: Event = {
