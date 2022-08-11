@@ -195,18 +195,18 @@ class CcxtExchange(Exchange):
         return order
 
     async def _fetch_order(self, params: FetchOrderParams) -> Order:
-        try:
-            raw_order = await self.exchange.fetch_order(params["id"], params["symbol"])
-            order = self._format(raw_order, StructureType.ORDER)
-            self.logger.info("Fetched from fetch: %s", order)
+        # try:
+        # raw_order = await self.exchange.fetch_order(params["id"], params["symbol"])
+        # order = self._format(raw_order, StructureType.ORDER)
+        # self.logger.info("Fetched from fetch: %s", order)
+        # return order
+        # except ccxtpro.OrderNotFound:
+        if order := await self._fetch_order_from_open(params):
+            self.logger.info("Fetched from open: %s", order)
             return order
-        except ccxtpro.OrderNotFound:
-            if order := await self._fetch_order_from_open(params):
-                self.logger.info("Fetched from open: %s", order)
-                return order
-            if order := await self._fetch_order_from_canceled(params):
-                self.logger.info("Fetched from canceled: %s", order)
-                return order
+        if order := await self._fetch_order_from_canceled(params):
+            self.logger.info("Fetched from canceled: %s", order)
+            return order
 
     async def _fetch_order_from_open(self, params: FetchOrderParams) -> Order:
         open_orders = await self.fetch_open_orders([params["symbol"]])
