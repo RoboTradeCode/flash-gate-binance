@@ -197,15 +197,18 @@ class CcxtExchange(Exchange):
     async def _fetch_order(self, params: FetchOrderParams) -> Order:
         if order := await self._fetch_order_from_open(params):
             self.logger.info("Fetched from open: %s", order)
-            return order
-        if order := await self._fetch_order_from_canceled(params):
+        elif order := await self._fetch_order_from_canceled(params):
             self.logger.info("Fetched from canceled: %s", order)
-            return order
         else:
             raw_order = await self.exchange.fetch_order(params["id"], params["symbol"])
             order = self._format(raw_order, StructureType.ORDER)
             self.logger.info("Fetched from fetch: %s", order)
-            return order
+
+        if order["price"] is None:
+            order["status"] = "closed"
+            self.logger.warning("Force closed status")
+
+        return order
 
     async def _fetch_order_from_open(self, params: FetchOrderParams) -> Order:
         open_orders = await self.fetch_open_orders([params["symbol"]])
