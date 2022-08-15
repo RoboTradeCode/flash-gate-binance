@@ -133,10 +133,10 @@ class Gate:
                     _order = (order["client_order_id"], order["symbol"])
                     self.tracked_orders.add(_order)
                     self.id_by_client_order_id.set(
-                        order["client_order_id"], created_order["id"]
+                        str(order["client_order_id"]), created_order["id"]
                     )
                     self.id_by_client_order_id.set(
-                        created_order["id"], order["client_order_id"]
+                        str(created_order["id"]), order["client_order_id"]
                     )
                     created_order["client_order_id"] = order["client_order_id"]
                     created_orders.append(created_order)
@@ -181,8 +181,8 @@ class Gate:
     ) -> None:
         client_order_ids = self._get_client_order_ids(orders)
         for client_order_id in client_order_ids:
-            self.event_id_by_client_order_id.set(client_order_id, event_id)
-            self.event_id_by_client_order_id.set(event_id, client_order_id)
+            self.event_id_by_client_order_id.set(str(client_order_id), event_id)
+            self.event_id_by_client_order_id.set(str(event_id), client_order_id)
 
     @staticmethod
     def _get_client_order_ids(orders: list[CreateOrderParams]) -> list[str]:
