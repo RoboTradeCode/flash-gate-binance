@@ -294,6 +294,7 @@ class Gate:
     async def _get_order(self, order):
         try:
             order = await self.exchange.fetch_order(order)
+            order["client_order_id"] = self.id_by_client_order_id.get(str(order["id"]))
 
             event: Event = {
                 "event_id": self.event_id_by_client_order_id.get(
