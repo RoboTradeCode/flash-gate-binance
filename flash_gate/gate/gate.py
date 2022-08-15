@@ -204,7 +204,7 @@ class Gate:
                 await self.exchange.cancel_orders(orders)
 
             except Exception as e:
-                self.logger.error(e)
+                self.logger.exception(e)
                 log_event: Event = {
                     "event_id": str(uuid.uuid4()),
                     "event": EventType.ERROR,
@@ -229,7 +229,7 @@ class Gate:
                     await self._get_order(order)
 
             except Exception as e:
-                self.logger.error(e)
+                self.logger.exception(e)
                 log_event: Event = {
                     "event_id": str(uuid.uuid4()),
                     "event": EventType.ERROR,
@@ -243,7 +243,7 @@ class Gate:
             try:
                 await self.exchange.cancel_all_orders(self.tickers)
             except Exception as e:
-                self.logger.error(e)
+                self.logger.exception(e)
                 log_event: Event = {
                     "event_id": str(uuid.uuid4()),
                     "event": EventType.ERROR,
@@ -281,7 +281,7 @@ class Gate:
             self.transmitter.offer(event, Destination.CORE)
             self.transmitter.offer(event, Destination.LOGS)
         except Exception as e:
-            self.logger.error(e)
+            self.logger.exception(e)
             log_event: Event = {
                 "event_id": str(uuid.uuid4()),
                 "event": EventType.ERROR,
@@ -409,7 +409,7 @@ class Gate:
                         self.transmitter.offer(event, Destination.LOGS)
 
                 except Exception as e:
-                    self.logger.error(e)
+                    self.logger.exception(e)
                     log_event: Event = {
                         "event_id": str(uuid.uuid4()),
                         "event": EventType.ERROR,
