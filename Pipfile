@@ -11,6 +11,7 @@ pyyaml = "*"
 bidict = "*"
 aiofiles = "*"
 sentry-sdk = "*"
+pymemcache = "*"
 
 [dev-packages]
 pytest = "*"

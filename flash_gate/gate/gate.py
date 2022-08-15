@@ -3,12 +3,12 @@ import json
 import logging
 import uuid
 from typing import NoReturn, Coroutine
-from bidict import bidict
 from flash_gate.exchange import CcxtExchange, ExchangePool
 from flash_gate.exchange.types import FetchOrderParams, CreateOrderParams
 from flash_gate.transmitter import AeronTransmitter
 from flash_gate.transmitter.enums import EventAction, Destination
 from flash_gate.transmitter.types import Event, EventType
+from flash_gate.cache.memcached import Memcached
 from .parsers import ConfigParser
 from more_itertools import chunked
 
@@ -37,10 +37,10 @@ class Gate:
         self.fetch_orderbooks = config_parser.fetch_orderbooks
         self.order_book_limit = config_parser.order_book_limit
         self.assets = config_parser.assets
-        self.id_by_client_order_id = bidict()
+        self.id_by_client_order_id = Memcached(key_prefix="client_order_id")
 
         self.tracked_orders: set[tuple[str, str]] = set()
-        self.event_id_by_client_order_id = bidict()
+        self.event_id_by_client_order_id = Memcached(key_prefix="event_id")
         self.order_books_received = 0
         self.lock = asyncio.Lock()
 
@@ -132,9 +132,12 @@ class Gate:
 
                     _order = (order["client_order_id"], order["symbol"])
                     self.tracked_orders.add(_order)
-                    self.id_by_client_order_id[
-                        order["client_order_id"]
-                    ] = created_order["id"]
+                    self.id_by_client_order_id.set(
+                        order["client_order_id"], created_order["id"]
+                    )
+                    self.id_by_client_order_id.set(
+                        created_order["id"], order["client_order_id"]
+                    )
                     created_order["client_order_id"] = order["client_order_id"]
                     created_orders.append(created_order)
 
@@ -169,7 +172,7 @@ class Gate:
         raise ValueError(f"Unknown client order id: {client_order_id}")
 
     def _get_client_order_id_by_id(self, order_id: str) -> str:
-        if client_order_id := self.id_by_client_order_id.inverse.get(order_id):
+        if client_order_id := self.id_by_client_order_id.get(order_id):
             return client_order_id
         raise ValueError(f"Unknown order id: {order_id}")
 
@@ -178,7 +181,8 @@ class Gate:
     ) -> None:
         client_order_ids = self._get_client_order_ids(orders)
         for client_order_id in client_order_ids:
-            self.event_id_by_client_order_id[client_order_id] = event_id
+            self.event_id_by_client_order_id.set(client_order_id, event_id)
+            self.event_id_by_client_order_id.set(event_id, client_order_id)
 
     @staticmethod
     def _get_client_order_ids(orders: list[CreateOrderParams]) -> list[str]:
