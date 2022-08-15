@@ -201,6 +201,31 @@ class Gate:
                             "symbol": order["symbol"],
                         }
                     )
+
+                for order in orders:
+                    await self._get_order(order)
+
+            except Exception as e:
+                self.logger.exception(e)
+                log_event: Event = {
+                    "event_id": str(uuid.uuid4()),
+                    "event": EventType.ERROR,
+                    "action": EventAction.CANCEL_ORDERS,
+                    "data": str(e),
+                }
+                self.transmitter.offer(log_event, Destination.LOGS)
+
+            try:
+                orders: list[FetchOrderParams] = []
+                for order in event["data"]:
+                    orders.append(
+                        {
+                            "id": self._get_id_by_client_order_id(
+                                order["client_order_id"]
+                            ),
+                            "symbol": order["symbol"],
+                        }
+                    )
                 await self.exchange.cancel_orders(orders)
 
             except Exception as e:
