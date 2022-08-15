@@ -167,12 +167,12 @@ class Gate:
         return order
 
     def _get_id_by_client_order_id(self, client_order_id: str) -> str:
-        if order_id := self.id_by_client_order_id.get(client_order_id):
+        if order_id := self.id_by_client_order_id.get(str(client_order_id)):
             return order_id
         raise ValueError(f"Unknown client order id: {client_order_id}")
 
     def _get_client_order_id_by_id(self, order_id: str) -> str:
-        if client_order_id := self.id_by_client_order_id.get(order_id):
+        if client_order_id := self.id_by_client_order_id.get(str(order_id)):
             return client_order_id
         raise ValueError(f"Unknown order id: {order_id}")
 
@@ -272,7 +272,7 @@ class Gate:
 
             event: Event = {
                 "event_id": self.event_id_by_client_order_id.get(
-                    order["client_order_id"]
+                    str(order["client_order_id"])
                 ),
                 "action": EventAction.GET_ORDERS,
                 "data": [order],
@@ -399,7 +399,7 @@ class Gate:
                     for order in orders:
                         event: Event = {
                             "event_id": self.event_id_by_client_order_id.get(
-                                order["client_order_id"]
+                                str(order["client_order_id"])
                             ),
                             "action": EventAction.ORDERS_UPDATE,
                             "data": [order],
