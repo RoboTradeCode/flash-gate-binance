@@ -268,7 +268,6 @@ class Gate:
 
     async def _get_order(self, order):
         try:
-            order["id"] = self._get_id_by_client_order_id(order["client_order_id"])
             order = await self.exchange.fetch_order(order)
 
             event: Event = {
