@@ -134,14 +134,14 @@ class Gate:
                         self.transmitter.offer(event, Destination.LOGS)
                         continue
 
-                    _order = (order["client_order_id"], order["symbol"])
-                    self.tracked_orders.add(_order)
                     self.id_by_client_order_id.set(
                         str(order["client_order_id"]), created_order["id"]
                     )
                     self.id_by_client_order_id.set(
                         str(created_order["id"]), order["client_order_id"]
                     )
+                    _order = (order["client_order_id"], order["symbol"])
+                    self.tracked_orders.add(_order)
                     created_order["client_order_id"] = order["client_order_id"]
                     created_orders.append(created_order)
 
@@ -411,7 +411,7 @@ class Gate:
                     log_event: Event = {
                         "event_id": str(uuid.uuid4()),
                         "event": EventType.ERROR,
-                        "action": EventAction.GET_BALANCE,
+                        "action": EventAction.ORDERS_UPDATE,
                         "data": str(e),
                     }
                     self.transmitter.offer(log_event, Destination.LOGS)
