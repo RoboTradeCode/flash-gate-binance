@@ -173,12 +173,10 @@ class Gate:
     def _get_id_by_client_order_id(self, client_order_id: str) -> str:
         if order_id := self.id_by_client_order_id.get(str(client_order_id)):
             return order_id
-        raise ValueError(f"Unknown client order id: {client_order_id}")
 
     def _get_client_order_id_by_id(self, order_id: str) -> str:
         if client_order_id := self.id_by_client_order_id.get(str(order_id)):
             return client_order_id
-        raise ValueError(f"Unknown order id: {order_id}")
 
     def _associate_with_event(
         self, event_id: str, orders: list[CreateOrderParams]
