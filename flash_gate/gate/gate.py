@@ -384,16 +384,12 @@ class Gate:
                             "symbol": _order[1],
                         }
 
-                        try:
-                            order = await exchange.fetch_order(params)
-                            order["client_order_id"] = _order[0]
-                            orders.append(order)
+                        order = await exchange.fetch_order(params)
+                        order["client_order_id"] = _order[0]
+                        orders.append(order)
 
-                            if order["status"] != "open":
-                                self.tracked_orders.discard(_order)
-
-                        except ValueError as e:
-                            print(e)
+                        if order["status"] != "open":
+                            self.tracked_orders.discard(_order)
 
                     for order in orders:
                         event: Event = {

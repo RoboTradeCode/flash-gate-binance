@@ -60,6 +60,8 @@ class AeronTransmitter:
                 break
             except aeron.AeronPublicationAdminActionError as e:
                 self.logger.warning(e)
+            except Exception as e:
+                self.logger.exception(e)
 
     def _get_publisher(self, destination) -> Publisher:
         match destination:
