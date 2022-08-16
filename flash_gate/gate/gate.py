@@ -37,10 +37,14 @@ class Gate:
         self.fetch_orderbooks = config_parser.fetch_orderbooks
         self.order_book_limit = config_parser.order_book_limit
         self.assets = config_parser.assets
-        self.id_by_client_order_id = Memcached(key_prefix="client_order_id")
+        self.id_by_client_order_id = Memcached(
+            key_prefix="client_order_id", default_noreply=False
+        )
 
         self.tracked_orders: set[tuple[str, str]] = set()
-        self.event_id_by_client_order_id = Memcached(key_prefix="event_id")
+        self.event_id_by_client_order_id = Memcached(
+            key_prefix="event_id", default_noreply=False
+        )
         self.order_books_received = 0
         self.lock = asyncio.Lock()
 
@@ -201,31 +205,6 @@ class Gate:
                             "symbol": order["symbol"],
                         }
                     )
-
-                for order in orders:
-                    await self._get_order(order)
-
-            except Exception as e:
-                self.logger.exception(e)
-                log_event: Event = {
-                    "event_id": str(uuid.uuid4()),
-                    "event": EventType.ERROR,
-                    "action": EventAction.CANCEL_ORDERS,
-                    "data": str(e),
-                }
-                self.transmitter.offer(log_event, Destination.LOGS)
-
-            try:
-                orders: list[FetchOrderParams] = []
-                for order in event["data"]:
-                    orders.append(
-                        {
-                            "id": self._get_id_by_client_order_id(
-                                order["client_order_id"]
-                            ),
-                            "symbol": order["symbol"],
-                        }
-                    )
                 await self.exchange.cancel_orders(orders)
 
             except Exception as e:
@@ -234,7 +213,8 @@ class Gate:
                     "event_id": str(uuid.uuid4()),
                     "event": EventType.ERROR,
                     "action": EventAction.CANCEL_ORDERS,
-                    "data": str(e),
+                    "message": str(e),
+                    "data": event["data"],
                 }
                 self.transmitter.offer(log_event, Destination.LOGS)
 
@@ -255,13 +235,6 @@ class Gate:
 
             except Exception as e:
                 self.logger.exception(e)
-                log_event: Event = {
-                    "event_id": str(uuid.uuid4()),
-                    "event": EventType.ERROR,
-                    "action": EventAction.CANCEL_ORDERS,
-                    "data": str(e),
-                }
-                self.transmitter.offer(log_event, Destination.LOGS)
 
     async def _cancel_all_orders(self) -> None:
         async with self.lock:
