@@ -379,16 +379,20 @@ class Gate:
                     orders = []
                     cp = self.tracked_orders.copy()
                     for _order in cp:
-                        params = {
-                            "id": self._get_id_by_client_order_id(_order[0]),
-                            "symbol": _order[1],
-                        }
+                        try:
+                            params = {
+                                "id": self._get_id_by_client_order_id(_order[0]),
+                                "symbol": _order[1],
+                            }
 
-                        order = await exchange.fetch_order(params)
-                        order["client_order_id"] = _order[0]
-                        orders.append(order)
+                            order = await exchange.fetch_order(params)
+                            order["client_order_id"] = _order[0]
+                            orders.append(order)
 
-                        if order["status"] != "open":
+                            if order["status"] != "open":
+                                self.tracked_orders.discard(_order)
+                        except ValueError as e:
+                            self.logger.warning(e)
                             self.tracked_orders.discard(_order)
 
                     for order in orders:
