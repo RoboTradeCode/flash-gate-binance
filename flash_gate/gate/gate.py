@@ -224,6 +224,7 @@ class Gate:
                 self.transmitter.offer(event, Destination.LOGS)
 
                 await asyncio.sleep(self.orders_delay)
+            await asyncio.sleep(0)
 
     async def health_check(self) -> NoReturn:
         while True:
