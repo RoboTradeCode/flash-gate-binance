@@ -44,16 +44,12 @@ class AeronTransmitter:
     def _offer(self, event: Event, destination: Destination):
         publisher = self._get_publisher(destination)
         message = self.formatter.format(event)
-        self.logger.debug("Trying to offer message: %s", message)
         self._offer_while_not_successful(publisher, message)
 
     def _offer_while_not_successful(self, publisher: Publisher, message: str) -> None:
         while True:
             try:
                 result = publisher.offer(message)
-                self.logger.debug(
-                    f"Message has been successfully offered [{result}]: %s", message
-                )
                 break
             except aeron.AeronPublicationNotConnectedError as e:
                 self.logger.debug(e)

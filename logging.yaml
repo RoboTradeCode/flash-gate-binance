@@ -16,7 +16,7 @@ handlers:
     backupCount: 100
 loggers:
   flash_gate:
-    level: INFO
+    level: DEBUG
     handlers:
       - console
 root:
