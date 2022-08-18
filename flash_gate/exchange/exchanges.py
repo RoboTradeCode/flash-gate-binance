@@ -1,5 +1,5 @@
 import asyncio
-import time
+from time import time_ns
 import itertools
 import logging
 from abc import ABC, abstractmethod
@@ -7,7 +7,6 @@ import ccxtpro
 from .enums import StructureType
 from .formatters import CcxtFormatterFactory
 from .types import OrderBook, Balance, Order, FetchOrderParams, CreateOrderParams
-from .nonce import Nonce
 
 
 class Exchange(ABC):
@@ -116,7 +115,7 @@ class CcxtExchange(Exchange):
 
     @staticmethod
     def nonce():
-        return Nonce.get()
+        return time_ns()
 
     async def fetch_order_book(self, symbol: str, limit: int) -> OrderBook:
         order_book = await self._fetch_order_book(symbol, limit)
@@ -180,20 +179,20 @@ class CcxtExchange(Exchange):
         return partial_balance
 
     async def fetch_order(self, params: FetchOrderParams) -> Order:
-        self.logger.info("Trying to fetch order: %s", params)
+        self.logger.debug("Trying to fetch order: %s", params)
         order = await self._fetch_order(params)
-        self.logger.info("Order has been successfully fetched: %s", order)
+        self.logger.debug("Order has been successfully fetched: %s", order)
         return order
 
     async def _fetch_order(self, params: FetchOrderParams) -> Order:
         if order := await self._fetch_order_from_open(params):
-            self.logger.info("Fetched from open: %s", order)
+            self.logger.debug("Fetched from open: %s", order)
         elif order := await self._fetch_order_from_canceled(params):
-            self.logger.info("Fetched from canceled: %s", order)
+            self.logger.debug("Fetched from canceled: %s", order)
         else:
             raw_order = await self.exchange.fetch_order(params["id"], params["symbol"])
             order = self._format(raw_order, StructureType.ORDER)
-            self.logger.info("Fetched from fetch: %s", order)
+            self.logger.debug("Fetched from fetch: %s", order)
 
         if order["price"] is None:
             order["status"] = "closed"
@@ -216,9 +215,9 @@ class CcxtExchange(Exchange):
                 return order
 
     async def fetch_open_orders(self, symbols: list[str]) -> list[Order]:
-        self.logger.info("Trying to fetch open orders: %s", symbols)
+        self.logger.debug("Trying to fetch open orders: %s", symbols)
         orders = await self._fetch_open_orders(symbols)
-        self.logger.info("Open orders has been successfully fetched: %s", orders)
+        self.logger.debug("Open orders has been successfully fetched: %s", orders)
         return orders
 
     async def _fetch_open_orders(self, symbols: list[str]) -> list[Order]:
@@ -247,7 +246,7 @@ class CcxtExchange(Exchange):
         return created_orders
 
     async def create_order(self, params: CreateOrderParams) -> Order:
-        self.logger.info("Trying to create order: %s", params)
+        self.logger.debug("Trying to create order: %s", params)
         raw_order = await self.exchange.create_order(
             params["symbol"],
             params["type"],
@@ -256,7 +255,7 @@ class CcxtExchange(Exchange):
             params["price"] if params["type"] != "market" else 0,
         )
         order = self._format(raw_order, StructureType.ORDER)
-        self.logger.info("Order has been successfully created: %s", order)
+        self.logger.debug("Order has been successfully created: %s", order)
         return order
 
     async def cancel_orders(self, orders: list[FetchOrderParams]) -> None:
@@ -267,14 +266,14 @@ class CcxtExchange(Exchange):
             await self.cancel_order(order)
 
     async def cancel_order(self, order: FetchOrderParams) -> None:
-        self.logger.info("Trying to cancel order: %s", order)
+        self.logger.debug("Trying to cancel order: %s", order)
         result = await self.exchange.cancel_order(order["id"], order["symbol"])
-        self.logger.info("Order has been successfully cancelled: %s", result)
+        self.logger.debug("Order has been successfully cancelled: %s", result)
 
     async def cancel_all_orders(self, symbols: list[str]) -> None:
-        self.logger.info("Trying to cancel all orders: %s", symbols)
+        self.logger.debug("Trying to cancel all orders: %s", symbols)
         await self._cancel_all_orders(symbols)
-        self.logger.info("All orders has been successfully cancelled")
+        self.logger.debug("All orders has been successfully cancelled")
 
     async def _cancel_all_orders(self, symbols: list[str]) -> None:
         raw_orders = await self._fetch_raw_open_orders(symbols)

@@ -59,7 +59,7 @@ class Gate:
         ]
 
     def handler(self, message: str):
-        logger.info("Message: %s", message)
+        logger.debug("Message: %s", message)
         event = self.deserialize_message(message)
         task = self.get_task(event)
         asyncio.create_task(task)
@@ -123,8 +123,6 @@ class Gate:
             self.event_id_by_client_order_id.set(order["client_order_id"], event_id)
             self.order_id_by_client_order_id.set(order["client_order_id"], order["id"])
             self.open_orders.add((order["client_order_id"], order["symbol"]))
-
-            print(order)
 
             event: Event = {
                 "event_id": event_id,
@@ -327,6 +325,7 @@ class Gate:
                     self.transmitter.offer(log_event, Destination.CORE)
                     self.transmitter.offer(log_event, Destination.LOGS)
 
+                logger.info("Open orders: %s", self.open_orders)
                 await asyncio.sleep(self.orders_delay)
             await asyncio.sleep(0)
 

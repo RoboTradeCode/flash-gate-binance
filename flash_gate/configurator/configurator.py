@@ -22,9 +22,9 @@ class Configurator:
         """
         Получить конфигурацию
         """
-        self.logger.info("Trying to get config: %s", self.source)
+        self.logger.debug("Trying to get config: %s", self.source)
         config = await self._get_config_from_driver()
-        self.logger.info("Config has been successfully received: %s", config)
+        self.logger.debug("Config has been successfully received: %s", config)
         return config
 
     async def _get_config_from_driver(self):
