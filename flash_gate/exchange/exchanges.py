@@ -1,3 +1,4 @@
+import asyncio
 import time
 import itertools
 import logging
@@ -279,6 +280,7 @@ class CcxtExchange(Exchange):
         raw_orders = await self._fetch_raw_open_orders(symbols)
         for raw_order in raw_orders:
             await self.exchange.cancel_order(raw_order["id"], raw_order["symbol"])
+            await asyncio.sleep(0.3)
 
     async def _fetch_raw_open_orders(self, symbols: list[str]) -> list[dict]:
         groups = [await self.exchange.fetch_open_orders(symbol) for symbol in symbols]
