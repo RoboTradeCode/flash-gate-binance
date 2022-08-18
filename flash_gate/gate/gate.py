@@ -6,7 +6,7 @@ from typing import NoReturn, Coroutine
 from flash_gate.exchange import CcxtExchange, ExchangePool
 from flash_gate.transmitter import AeronTransmitter
 from flash_gate.transmitter.enums import EventAction, Destination
-from flash_gate.transmitter.types import Event, EventNode
+from flash_gate.transmitter.types import Event, EventNode, EventType
 from .parsers import ConfigParser
 from flash_gate.cache.memcached import Memcached
 
@@ -99,9 +99,8 @@ class Gate:
                 await self.create_order(param, event.get("event_id"))
 
     async def get_orders(self, event: Event):
-        async with lock:
-            for param in event.get("data", []):
-                await self.get_order(param)
+        for param in event.get("data", []):
+            await self.get_order(param)
 
     async def cancel_orders(self, event: Event):
         async with lock:
@@ -137,6 +136,15 @@ class Gate:
 
         except Exception as e:
             logger.exception(e)
+            log_event: Event = {
+                "event_id": event_id,
+                "event": EventType.ERROR,
+                "action": EventAction.CREATE_ORDERS,
+                "message": str(e),
+                "data": [param],
+            }
+            self.transmitter.offer(log_event, Destination.CORE)
+            self.transmitter.offer(log_event, Destination.LOGS)
 
     async def cancel_order(self, param: dict):
         try:
@@ -147,15 +155,25 @@ class Gate:
 
         except Exception as e:
             logger.exception(e)
+            log_event: Event = {
+                "event_id": str(uuid.uuid4()),
+                "event": EventType.ERROR,
+                "action": EventAction.CANCEL_ORDERS,
+                "message": str(e),
+                "data": [param],
+            }
+            self.transmitter.offer(log_event, Destination.CORE)
+            self.transmitter.offer(log_event, Destination.LOGS)
 
     async def get_order(self, param: dict):
         try:
             order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
             symbol = param["symbol"]
 
-            order = await self.exchange.fetch_order(
-                {"id": order_id, "symbol": symbol}
-            )
+            async with lock:
+                order = await self.exchange.fetch_order(
+                    {"id": order_id, "symbol": symbol}
+                )
 
             order["client_order_id"] = param["client_order_id"]
 
@@ -171,12 +189,21 @@ class Gate:
 
         except Exception as e:
             logger.exception(e)
+            log_event: Event = {
+                "event_id": event_id,
+                "event": EventType.ERROR,
+                "action": EventAction.GET_ORDERS,
+                "message": str(e),
+                "data": [param],
+            }
+            self.transmitter.offer(log_event, Destination.CORE)
+            self.transmitter.offer(log_event, Destination.LOGS)
 
     async def get_balance(self, event: Event):
-        try:
-            if not (assets := event.get("data", [])):
-                assets = self.assets
+        if not (assets := event.get("data", [])):
+            assets = self.assets
 
+        try:
             balance = await self.exchange.fetch_partial_balance(assets)
 
             event: Event = {
@@ -189,6 +216,15 @@ class Gate:
 
         except Exception as e:
             logger.exception(e)
+            log_event: Event = {
+                "event_id": event["event_id"],
+                "event": EventType.ERROR,
+                "action": EventAction.GET_BALANCE,
+                "message": str(e),
+                "data": assets,
+            }
+            self.transmitter.offer(log_event, Destination.CORE)
+            self.transmitter.offer(log_event, Destination.LOGS)
 
     async def watch_orderbooks(self):
         while True:
