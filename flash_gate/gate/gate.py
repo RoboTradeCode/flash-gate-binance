@@ -94,29 +94,31 @@ class Gate:
                 return self.get_balance(event)
 
     async def create_orders(self, event: Event):
-        for param in event.get("data", []):
-            await self.create_order(param, event.get("event_id"))
+        async with lock:
+            for param in event.get("data", []):
+                await self.create_order(param, event.get("event_id"))
 
     async def get_orders(self, event: Event):
-        for param in event.get("data", []):
-            await self.get_order(param)
+        async with lock:
+            for param in event.get("data", []):
+                await self.get_order(param)
 
     async def cancel_orders(self, event: Event):
-        for param in event.get("data", []):
-            await self.cancel_order(param)
+        async with lock:
+            for param in event.get("data", []):
+                await self.cancel_order(param)
 
     async def cancel_all_orders(self):
-        try:
-            async with lock:
+        async with lock:
+            try:
                 await self.exchange.cancel_all_orders(self.tickers)
 
-        except Exception as e:
-            logger.exception(e)
+            except Exception as e:
+                logger.exception(e)
 
     async def create_order(self, param: dict, event_id: str):
         try:
-            async with lock:
-                order = await self.exchange.create_order(param)
+            order = await self.exchange.create_order(param)
 
             order["client_order_id"] = param["client_order_id"]
             self.event_id_by_client_order_id.set(order["client_order_id"], event_id)
@@ -141,8 +143,7 @@ class Gate:
             order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
             symbol = param["symbol"]
 
-            async with lock:
-                await self.exchange.cancel_order({"id": order_id, "symbol": symbol})
+            await self.exchange.cancel_order({"id": order_id, "symbol": symbol})
 
         except Exception as e:
             logger.exception(e)
@@ -152,10 +153,9 @@ class Gate:
             order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
             symbol = param["symbol"]
 
-            async with lock:
-                order = await self.exchange.fetch_order(
-                    {"id": order_id, "symbol": symbol}
-                )
+            order = await self.exchange.fetch_order(
+                {"id": order_id, "symbol": symbol}
+            )
 
             order["client_order_id"] = param["client_order_id"]
 
@@ -177,8 +177,7 @@ class Gate:
             if not (assets := event.get("data", [])):
                 assets = self.assets
 
-            async with lock:
-                balance = await self.exchange.fetch_partial_balance(assets)
+            balance = await self.exchange.fetch_partial_balance(assets)
 
             event: Event = {
                 "event_id": event["event_id"],
