@@ -78,6 +78,9 @@ class Gate:
         self.transmitter.offer(event, Destination.LOGS)
 
     def get_task(self, event: Event) -> Coroutine:
+        if isinstance(event, dict):
+            return asyncio.sleep(0)
+
         match event.get("action"):
             case EventAction.CREATE_ORDERS:
                 return self.create_orders(event)
