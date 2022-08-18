@@ -121,9 +121,7 @@ class Gate:
             order["client_order_id"] = param["client_order_id"]
             self.event_id_by_client_order_id.set(order["client_order_id"], event_id)
             self.order_id_by_client_order_id.set(order["client_order_id"], order["id"])
-            self.open_orders.add(
-                {"client_order_id": order["client_order_id"], "symbol": order["symbol"]}
-            )
+            self.open_orders.add((order["client_order_id"], order["symbol"]))
 
             print(order)
 
@@ -237,22 +235,19 @@ class Gate:
 
     async def watch_orders(self):
         while True:
-            for param in self.open_orders.copy():
+            for client_order_id, symbol in self.open_orders.copy():
                 try:
-                    order_id = self.order_id_by_client_order_id.get(
-                        param["client_order_id"]
-                    )
-                    symbol = param["symbol"]
+                    order_id = self.order_id_by_client_order_id.get(client_order_id)
 
                     async with lock:
                         order = await self.exchange.fetch_order(
                             {"id": order_id, "symbol": symbol}
                         )
 
-                    order["client_order_id"] = param["client_order_id"]
+                    order["client_order_id"] = client_order_id
 
                     if order["status"] != "open":
-                        self.open_orders.discard(param)
+                        self.open_orders.discard((client_order_id, symbol))
 
                     event: Event = {
                         "event_id": self.event_id_by_client_order_id.get(
