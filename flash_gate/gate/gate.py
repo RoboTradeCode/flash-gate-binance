@@ -329,7 +329,7 @@ class Gate:
                     self.transmitter.offer(log_event, Destination.CORE)
                     self.transmitter.offer(log_event, Destination.LOGS)
 
-                logger.info("Open orders: %s", self.open_orders)
+                logger.info("Open orders: %s", len(self.open_orders))
                 await asyncio.sleep(self.orders_delay)
             await asyncio.sleep(0)
 
