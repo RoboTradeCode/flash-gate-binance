@@ -53,9 +53,9 @@ class Gate:
         return [
             self.transmitter.run(),
             self.watch_orderbooks(),
-            self.watch_balance(),
-            self.watch_orders(),
-            self.health_check(),
+            # self.watch_balance(),
+            # self.watch_orders(),
+            # self.health_check(),
         ]
 
     def handler(self, message: str):
