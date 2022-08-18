@@ -44,7 +44,7 @@ class ExchangePool:
     async def acquire(self):
         acquired_exchange = self._queue.get()
         if (remaining := acquired_exchange.remaining) > 0:
-            sleep(remaining)
+            await asyncio.sleep(remaining)
 
         now = monotonic()
         acquired_exchange.last_acquire = now

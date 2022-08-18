@@ -12,6 +12,7 @@ bidict = "*"
 aiofiles = "*"
 sentry-sdk = "*"
 pymemcache = "*"
+more-itertools = "*"
 
 [dev-packages]
 pytest = "*"

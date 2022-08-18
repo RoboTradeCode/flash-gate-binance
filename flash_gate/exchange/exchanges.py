@@ -118,9 +118,7 @@ class CcxtExchange(Exchange):
         return Nonce.get()
 
     async def fetch_order_book(self, symbol: str, limit: int) -> OrderBook:
-        self.logger.info("Trying to fetch order book: %s", symbol)
         order_book = await self._fetch_order_book(symbol, limit)
-        self.logger.info("Order book has been successfully fetched: %s", order_book)
         return order_book
 
     async def _fetch_order_book(self, symbol: str, limit: int) -> OrderBook:
@@ -131,9 +129,7 @@ class CcxtExchange(Exchange):
     async def fetch_order_books(
         self, symbols: list[str], limit: int
     ) -> list[OrderBook]:
-        self.logger.info("Trying to fetch order books: %s", symbols)
         order_book = await self._fetch_order_books(symbols, limit)
-        self.logger.info("Order book has been successfully fetched: %s", order_book)
         return order_book
 
     async def _fetch_order_books(
@@ -148,9 +144,7 @@ class CcxtExchange(Exchange):
         return order_books
 
     async def watch_order_book(self, symbol: str, limit: int) -> OrderBook:
-        self.logger.debug("Trying to watch order book: %s", symbol)
         order_book = await self._watch_order_book(symbol, limit)
-        self.logger.debug("Order book has been successfully watched: %s", order_book)
         return order_book
 
     async def _watch_order_book(self, symbol: str, limit: int) -> OrderBook:
@@ -159,9 +153,7 @@ class CcxtExchange(Exchange):
         return order_book
 
     async def fetch_partial_balance(self, parts: list[str]) -> Balance:
-        self.logger.info("Trying to fetch partial balance: %s", parts)
         balance = await self._fetch_partial_balance(parts)
-        self.logger.info("Partial balance has been successfully fetched: %s", balance)
         return balance
 
     async def _fetch_partial_balance(self, parts: list[str]) -> Balance:
@@ -171,9 +163,7 @@ class CcxtExchange(Exchange):
         return balance
 
     async def watch_partial_balance(self, parts: list[str]) -> Balance:
-        self.logger.info("Trying to watch partial balance: %s", parts)
         balance = await self._watch_partial_balance(parts)
-        self.logger.info("Partial balance has been successfully watched: %s", balance)
         return balance
 
     async def _watch_partial_balance(self, parts: list[str]) -> Balance:
@@ -206,7 +196,7 @@ class CcxtExchange(Exchange):
 
         if order["price"] is None:
             order["status"] = "closed"
-            self.logger.warning("Force closed status")
+            self.logger.warning("Force closed status: %s", order)
 
         return order
 
@@ -236,9 +226,7 @@ class CcxtExchange(Exchange):
         return orders
 
     async def watch_orders(self) -> list[Order]:
-        self.logger.info("Trying to watch orders")
         orders = await self._watch_orders()
-        self.logger.info("Orders has been successfully watched: %s", orders)
         return orders
 
     async def _watch_orders(self) -> list[Order]:
@@ -247,19 +235,17 @@ class CcxtExchange(Exchange):
         return orders
 
     async def create_orders(self, orders: list[CreateOrderParams]) -> list[Order]:
-        self.logger.info("Trying to create orders: %s", orders)
         orders = await self._create_orders(orders)
-        self.logger.info("Orders has been successfully created: %s", orders)
         return orders
 
     async def _create_orders(self, orders: list[CreateOrderParams]) -> list[Order]:
         created_orders = []
         for order in orders:
-            created_order = await self._create_order(order)
+            created_order = await self.create_order(order)
             created_orders.append(created_order)
         return created_orders
 
-    async def _create_order(self, params: CreateOrderParams) -> Order:
+    async def create_order(self, params: CreateOrderParams) -> Order:
         self.logger.info("Trying to create order: %s", params)
         raw_order = await self.exchange.create_order(
             params["symbol"],
@@ -273,16 +259,16 @@ class CcxtExchange(Exchange):
         return order
 
     async def cancel_orders(self, orders: list[FetchOrderParams]) -> None:
-        self.logger.info("Trying to cancel orders: %s", orders)
         await self._cancel_orders(orders)
-        self.logger.info("Orders has been successfully cancelled")
 
     async def _cancel_orders(self, orders: list[FetchOrderParams]) -> None:
         for order in orders:
-            await self._cancel_order(order)
+            await self.cancel_order(order)
 
-    async def _cancel_order(self, order: FetchOrderParams) -> None:
-        await self.exchange.cancel_order(order["id"], order["symbol"])
+    async def cancel_order(self, order: FetchOrderParams) -> None:
+        self.logger.info("Trying to cancel order: %s", order)
+        result = await self.exchange.cancel_order(order["id"], order["symbol"])
+        self.logger.info("Order has been successfully cancelled: %s", result)
 
     async def cancel_all_orders(self, symbols: list[str]) -> None:
         self.logger.info("Trying to cancel all orders: %s", symbols)
