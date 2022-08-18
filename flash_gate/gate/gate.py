@@ -176,6 +176,7 @@ class Gate:
                 order = await self.exchange.fetch_order(
                     {"id": order_id, "symbol": symbol}
                 )
+            await asyncio.sleep(0)
 
             order["client_order_id"] = param["client_order_id"]
 
@@ -208,6 +209,7 @@ class Gate:
         try:
             async with lock:
                 balance = await self.exchange.fetch_partial_balance(assets)
+            await asyncio.sleep(0)
 
             event: Event = {
                 "event_id": event["event_id"],
@@ -236,6 +238,7 @@ class Gate:
 
                 async with lock:
                     orderbooks = await exchange.fetch_order_books(self.tickers, 10)
+                await asyncio.sleep(0)
 
                 self.orderbooks_received += len(orderbooks)
 
@@ -266,6 +269,7 @@ class Gate:
             try:
                 async with lock:
                     balance = await self.exchange.fetch_partial_balance(self.assets)
+                await asyncio.sleep(0)
 
                 event: Event = {
                     "event_id": str(uuid.uuid4()),
@@ -299,6 +303,7 @@ class Gate:
                         order = await self.exchange.fetch_order(
                             {"id": order_id, "symbol": symbol}
                         )
+                    await asyncio.sleep(0)
 
                     order["client_order_id"] = client_order_id
 
