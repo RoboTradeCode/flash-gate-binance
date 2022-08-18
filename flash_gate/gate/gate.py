@@ -3,12 +3,13 @@ import json
 import logging
 import uuid
 from typing import NoReturn, Coroutine
+import ccxt.base.errors
+from flash_gate.cache.memcached import Memcached
 from flash_gate.exchange import CcxtExchange, ExchangePool
 from flash_gate.transmitter import AeronTransmitter
 from flash_gate.transmitter.enums import EventAction, Destination
 from flash_gate.transmitter.types import Event, EventNode, EventType
 from .parsers import ConfigParser
-from flash_gate.cache.memcached import Memcached
 
 logger = logging.getLogger(__name__)
 lock = asyncio.Lock()
@@ -150,6 +151,9 @@ class Gate:
             symbol = param["symbol"]
 
             await self.exchange.cancel_order({"id": order_id, "symbol": symbol})
+
+        except ccxt.base.errors.OrderNotFound:
+            pass
 
         except Exception as e:
             logger.exception(e)
