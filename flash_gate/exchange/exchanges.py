@@ -283,7 +283,12 @@ class CcxtExchange(Exchange):
             await asyncio.sleep(0.3)
 
     async def _fetch_raw_open_orders(self, symbols: list[str]) -> list[dict]:
-        groups = [await self.exchange.fetch_open_orders(symbol) for symbol in symbols]
+        groups = []
+        for symbol in symbols:
+            orders = await self.exchange.fetch_open_orders(symbol)
+            groups.append(orders)
+            await asyncio.sleep(0.2)
+
         raw_orders = list(itertools.chain.from_iterable(groups))
         return raw_orders
 
