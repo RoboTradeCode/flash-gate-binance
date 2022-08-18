@@ -190,7 +190,7 @@ class Gate:
         except Exception as e:
             logger.exception(e)
             log_event: Event = {
-                "event_id": event_id,
+                "event_id": str(uuid.uuid4()),
                 "event": EventType.ERROR,
                 "action": EventAction.GET_ORDERS,
                 "message": str(e),
@@ -204,7 +204,8 @@ class Gate:
             assets = self.assets
 
         try:
-            balance = await self.exchange.fetch_partial_balance(assets)
+            async with lock:
+                balance = await self.exchange.fetch_partial_balance(assets)
 
             event: Event = {
                 "event_id": event["event_id"],
@@ -246,6 +247,15 @@ class Gate:
 
             except Exception as e:
                 logger.exception(e)
+                log_event: Event = {
+                    "event_id": str(uuid.uuid4()),
+                    "event": EventType.ERROR,
+                    "action": EventAction.ORDER_BOOK_UPDATE,
+                    "message": str(e),
+                    "data": self.tickers,
+                }
+                self.transmitter.offer(log_event, Destination.CORE)
+                self.transmitter.offer(log_event, Destination.LOGS)
 
             await asyncio.sleep(self.orderbooks_delay)
 
@@ -265,6 +275,15 @@ class Gate:
 
             except Exception as e:
                 logger.exception(e)
+                log_event: Event = {
+                    "event_id": str(uuid.uuid4()),
+                    "event": EventType.ERROR,
+                    "action": EventAction.BALANCE_UPDATE,
+                    "message": str(e),
+                    "data": self.assets,
+                }
+                self.transmitter.offer(log_event, Destination.CORE)
+                self.transmitter.offer(log_event, Destination.LOGS)
 
             await asyncio.sleep(self.balance_delay)
 
@@ -296,6 +315,17 @@ class Gate:
 
                 except Exception as e:
                     logger.exception(e)
+                    log_event: Event = {
+                        "event_id": str(uuid.uuid4()),
+                        "event": EventType.ERROR,
+                        "action": EventAction.ORDERS_UPDATE,
+                        "message": str(e),
+                        "data": [
+                            {"client_order_id": client_order_id, "symbol": symbol}
+                        ],
+                    }
+                    self.transmitter.offer(log_event, Destination.CORE)
+                    self.transmitter.offer(log_event, Destination.LOGS)
 
                 await asyncio.sleep(self.orders_delay)
             await asyncio.sleep(0)
