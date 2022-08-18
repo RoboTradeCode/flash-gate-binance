@@ -125,6 +125,8 @@ class Gate:
                 {"client_order_id": order["client_order_id"], "symbol": order["symbol"]}
             )
 
+            print(order)
+
             event: Event = {
                 "event_id": event_id,
                 "action": EventAction.CREATE_ORDERS,
