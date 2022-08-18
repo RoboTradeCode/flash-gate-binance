@@ -103,128 +103,164 @@ class Gate:
             await self.cancel_order(param)
 
     async def cancel_all_orders(self):
-        async with lock:
-            await self.exchange.cancel_all_orders(self.tickers)
+        try:
+            async with lock:
+                await self.exchange.cancel_all_orders(self.tickers)
+
+        except Exception as e:
+            logger.exception(e)
 
     async def create_order(self, param: dict, event_id: str):
-        async with lock:
-            order = await self.exchange.create_order(param)
+        try:
+            async with lock:
+                order = await self.exchange.create_order(param)
 
-        order["client_order_id"] = param["client_order_id"]
-        self.event_id_by_client_order_id.set(order["client_order_id"], event_id)
-        self.order_id_by_client_order_id.set(order["client_order_id"], order["id"])
-        self.open_orders.add(
-            {"client_order_id": order["client_order_id"], "symbol": order["symbol"]}
-        )
+            order["client_order_id"] = param["client_order_id"]
+            self.event_id_by_client_order_id.set(order["client_order_id"], event_id)
+            self.order_id_by_client_order_id.set(order["client_order_id"], order["id"])
+            self.open_orders.add(
+                {"client_order_id": order["client_order_id"], "symbol": order["symbol"]}
+            )
 
-        event: Event = {
-            "event_id": event_id,
-            "action": EventAction.CREATE_ORDERS,
-            "data": [order],
-        }
-        self.transmitter.offer(event, Destination.CORE)
-        self.transmitter.offer(event, Destination.LOGS)
+            event: Event = {
+                "event_id": event_id,
+                "action": EventAction.CREATE_ORDERS,
+                "data": [order],
+            }
+            self.transmitter.offer(event, Destination.CORE)
+            self.transmitter.offer(event, Destination.LOGS)
+
+        except Exception as e:
+            logger.exception(e)
 
     async def cancel_order(self, param: dict):
-        order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
-        symbol = param["symbol"]
+        try:
+            order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
+            symbol = param["symbol"]
 
-        async with lock:
-            await self.exchange.cancel_order({"id": order_id, "symbol": symbol})
+            async with lock:
+                await self.exchange.cancel_order({"id": order_id, "symbol": symbol})
+
+        except Exception as e:
+            logger.exception(e)
 
     async def get_order(self, param: dict):
-        order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
-        symbol = param["symbol"]
+        try:
+            order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
+            symbol = param["symbol"]
 
-        async with lock:
-            order = await self.exchange.fetch_order({"id": order_id, "symbol": symbol})
+            async with lock:
+                order = await self.exchange.fetch_order(
+                    {"id": order_id, "symbol": symbol}
+                )
 
-        order["client_order_id"] = param["client_order_id"]
+            order["client_order_id"] = param["client_order_id"]
 
-        event: Event = {
-            "event_id": self.event_id_by_client_order_id.get(order["client_order_id"]),
-            "action": EventAction.GET_ORDERS,
-            "data": [order],
-        }
-        self.transmitter.offer(event, Destination.CORE)
-        self.transmitter.offer(event, Destination.LOGS)
+            event: Event = {
+                "event_id": self.event_id_by_client_order_id.get(
+                    order["client_order_id"]
+                ),
+                "action": EventAction.GET_ORDERS,
+                "data": [order],
+            }
+            self.transmitter.offer(event, Destination.CORE)
+            self.transmitter.offer(event, Destination.LOGS)
+
+        except Exception as e:
+            logger.exception(e)
 
     async def get_balance(self, event: Event):
-        if not (assets := event.get("data", [])):
-            assets = self.assets
+        try:
+            if not (assets := event.get("data", [])):
+                assets = self.assets
 
-        async with lock:
-            balance = await self.exchange.fetch_partial_balance(assets)
+            async with lock:
+                balance = await self.exchange.fetch_partial_balance(assets)
 
-        event: Event = {
-            "event_id": event["event_id"],
-            "action": EventAction.GET_BALANCE,
-            "data": balance,
-        }
-        self.transmitter.offer(event, Destination.BALANCE)
-        self.transmitter.offer(event, Destination.LOGS)
+            event: Event = {
+                "event_id": event["event_id"],
+                "action": EventAction.GET_BALANCE,
+                "data": balance,
+            }
+            self.transmitter.offer(event, Destination.BALANCE)
+            self.transmitter.offer(event, Destination.LOGS)
+
+        except Exception as e:
+            logger.exception(e)
 
     async def watch_orderbooks(self):
         while True:
-            exchange = await self.exchange_pool.acquire()
+            try:
+                exchange = await self.exchange_pool.acquire()
 
-            async with lock:
-                orderbooks = await exchange.fetch_order_books(self.tickers, 10)
+                async with lock:
+                    orderbooks = await exchange.fetch_order_books(self.tickers, 10)
 
-            self.orderbooks_received += len(orderbooks)
+                self.orderbooks_received += len(orderbooks)
 
-            for orderbook in orderbooks:
-                event: Event = {
-                    "event_id": str(uuid.uuid4()),
-                    "action": EventAction.ORDER_BOOK_UPDATE,
-                    "data": orderbook,
-                }
-                self.transmitter.offer(event, Destination.ORDER_BOOK)
+                for orderbook in orderbooks:
+                    event: Event = {
+                        "event_id": str(uuid.uuid4()),
+                        "action": EventAction.ORDER_BOOK_UPDATE,
+                        "data": orderbook,
+                    }
+                    self.transmitter.offer(event, Destination.ORDER_BOOK)
+
+            except Exception as e:
+                logger.exception(e)
 
             await asyncio.sleep(self.orderbooks_delay)
 
     async def watch_balance(self):
         while True:
-            async with lock:
-                balance = await self.exchange.fetch_partial_balance(self.assets)
+            try:
+                async with lock:
+                    balance = await self.exchange.fetch_partial_balance(self.assets)
 
-            event: Event = {
-                "event_id": str(uuid.uuid4()),
-                "action": EventAction.BALANCE_UPDATE,
-                "data": balance,
-            }
-            self.transmitter.offer(event, Destination.BALANCE)
-            self.transmitter.offer(event, Destination.LOGS)
+                event: Event = {
+                    "event_id": str(uuid.uuid4()),
+                    "action": EventAction.BALANCE_UPDATE,
+                    "data": balance,
+                }
+                self.transmitter.offer(event, Destination.BALANCE)
+                self.transmitter.offer(event, Destination.LOGS)
+
+            except Exception as e:
+                logger.exception(e)
 
             await asyncio.sleep(self.balance_delay)
 
     async def watch_orders(self):
         while True:
             for param in self.open_orders.copy():
-                order_id = self.order_id_by_client_order_id.get(
-                    param["client_order_id"]
-                )
-                symbol = param["symbol"]
-
-                async with lock:
-                    order = await self.exchange.fetch_order(
-                        {"id": order_id, "symbol": symbol}
+                try:
+                    order_id = self.order_id_by_client_order_id.get(
+                        param["client_order_id"]
                     )
+                    symbol = param["symbol"]
 
-                order["client_order_id"] = param["client_order_id"]
+                    async with lock:
+                        order = await self.exchange.fetch_order(
+                            {"id": order_id, "symbol": symbol}
+                        )
 
-                if order["status"] != "open":
-                    self.open_orders.discard(param)
+                    order["client_order_id"] = param["client_order_id"]
 
-                event: Event = {
-                    "event_id": self.event_id_by_client_order_id.get(
-                        order["client_order_id"]
-                    ),
-                    "action": EventAction.ORDERS_UPDATE,
-                    "data": [order],
-                }
-                self.transmitter.offer(event, Destination.CORE)
-                self.transmitter.offer(event, Destination.LOGS)
+                    if order["status"] != "open":
+                        self.open_orders.discard(param)
+
+                    event: Event = {
+                        "event_id": self.event_id_by_client_order_id.get(
+                            order["client_order_id"]
+                        ),
+                        "action": EventAction.ORDERS_UPDATE,
+                        "data": [order],
+                    }
+                    self.transmitter.offer(event, Destination.CORE)
+                    self.transmitter.offer(event, Destination.LOGS)
+
+                except Exception as e:
+                    logger.exception(e)
 
                 await asyncio.sleep(self.orders_delay)
             await asyncio.sleep(0)
