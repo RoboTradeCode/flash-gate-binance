@@ -1,5 +1,5 @@
 import asyncio
-from time import time_ns
+from time import time_ns, sleep
 import itertools
 import logging
 from abc import ABC, abstractmethod
@@ -115,6 +115,7 @@ class CcxtExchange(Exchange):
 
     @staticmethod
     def nonce():
+        sleep(1e-9)
         return time_ns()
 
     async def fetch_order_book(self, symbol: str, limit: int) -> OrderBook:
