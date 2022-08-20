@@ -233,9 +233,7 @@ class Gate:
         while True:
             try:
                 exchange = await self.exchange_pool.acquire()
-
-                async with lock:
-                    orderbooks = await exchange.fetch_order_books(self.tickers, 10)
+                orderbooks = await exchange.fetch_order_books(self.tickers, 10)
 
                 self.orderbooks_received += len(orderbooks)
 
