@@ -115,7 +115,6 @@ class CcxtExchange(Exchange):
 
     @staticmethod
     def nonce():
-        sleep(1e-9)
         return time_ns()
 
     async def fetch_order_book(self, symbol: str, limit: int) -> OrderBook:
@@ -247,7 +246,7 @@ class CcxtExchange(Exchange):
         return created_orders
 
     async def create_order(self, params: CreateOrderParams) -> Order:
-        # self.logger.debug("Trying to create order: %s", params)
+        self.logger.debug("Trying to create order: %s", params)
         raw_order = await self.exchange.create_order(
             params["symbol"],
             params["type"],
@@ -256,7 +255,7 @@ class CcxtExchange(Exchange):
             params["price"] if params["type"] != "market" else 0,
         )
         order = self._format(raw_order, StructureType.ORDER)
-        # self.logger.debug("Order has been successfully created: %s", order)
+        self.logger.debug("Order has been successfully created: %s", order)
         return order
 
     async def cancel_orders(self, orders: list[FetchOrderParams]) -> None:

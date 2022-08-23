@@ -41,7 +41,7 @@ class ExchangePool:
         exchange.exchange.session = session
         return exchange
 
-    async def acquire(self):
+    async def acquire(self) -> CcxtExchange:
         acquired_exchange = self._queue.get()
         if (remaining := acquired_exchange.remaining) > 0:
             await asyncio.sleep(remaining)
@@ -57,3 +57,40 @@ class ExchangePool:
             acquired_exchange = self._queue.get()
             session = acquired_exchange.exchange.exchange.session
             await session.close()
+
+
+class PrivateExchangePool:
+    def __init__(self, exchange_id: str, config: dict, accounts: list[dict], delay=0):
+        """
+        Пул exchange с приватным соединением. Создает подключения с помощью переданных ключей.
+        """
+        self._exchange_id = exchange_id
+        self._config = config
+
+        self._queue: Queue[AcquiredExchange] = Queue()
+        for exchange in self._create_exchanges(accounts):
+            self._queue.put(AcquiredExchange(exchange, monotonic(), delay))
+
+    def _create_exchanges(self, accounts: list[dict]) -> list[CcxtExchange]:
+        """
+        Создать подключения к бирже
+        """
+        exchanges = [self._create_exchange(keys) for keys in accounts]
+        return exchanges
+
+    def _create_exchange(self, keys: dict) -> CcxtExchange:
+        """
+        Подключиться к бирже
+        :param keys: словарь с ключами api_key, secret_key
+        """
+        config = self._config | keys
+        exchange = CcxtExchange(self._exchange_id, config)
+        return exchange
+
+    async def acquire(self) -> CcxtExchange:
+        """
+        Получить очередной экземпляр exchange
+        """
+        acquired_exchange = self._queue.get()
+        self._queue.put(acquired_exchange)
+        return acquired_exchange.exchange

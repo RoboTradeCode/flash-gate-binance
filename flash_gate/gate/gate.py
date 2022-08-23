@@ -10,6 +10,7 @@ from flash_gate.transmitter import AeronTransmitter
 from flash_gate.transmitter.enums import EventAction, Destination
 from flash_gate.transmitter.types import Event, EventNode, EventType
 from .parsers import ConfigParser
+from ..exchange.pool import PrivateExchangePool
 
 logger = logging.getLogger(__name__)
 lock = asyncio.Lock()
@@ -28,7 +29,23 @@ class Gate:
         self.event_id_by_client_order_id = Memcached(key_prefix="event_id")
         self.order_id_by_client_order_id = Memcached(key_prefix="order_id")
         self.transmitter = AeronTransmitter(self.handler, config)
-        self.exchange = CcxtExchange(exchange_id, exchange_config)
+
+        self._exchange = (
+            CcxtExchange(exchange_id, exchange_config)
+            if config_parser.accounts is None
+            else None
+        )
+        self._private_exchange_pool = (
+            PrivateExchangePool(
+                exchange_id=exchange_id,
+                config=exchange_config,
+                accounts=config_parser.accounts,
+            )
+            if config_parser.accounts is not None
+            else None
+        )
+        self.sem = asyncio.Semaphore(len(config_parser.accounts))
+
         self.exchange_pool = ExchangePool(
             exchange_id,
             config_parser.public_config,
@@ -65,6 +82,17 @@ class Gate:
         task = self.get_task(event)
         asyncio.create_task(task)
 
+    async def get_exchange(self):
+        """
+        Получить экземпляр биржи
+
+        Возваращет очередной экземпляр из пула или один и тот же экземлпяр, если мульти-аккаунты не используются.
+        Позволяет работать с пулом таким образом, как если бы это был атрибут класса.
+        """
+        if self._private_exchange_pool is not None:
+            return await self._private_exchange_pool.acquire()
+        return self._exchange
+
     def deserialize_message(self, message: str) -> Event:
         try:
             event = json.loads(message)
@@ -95,30 +123,34 @@ class Gate:
                 return self.get_balance(event)
 
     async def create_orders(self, event: Event):
-        async with lock:
-            for param in event.get("data", []):
-                await self.create_order(param, event.get("event_id"))
+        for param in event.get("data", []):
+            await self.create_order(param, event.get("event_id"))
 
     async def get_orders(self, event: Event):
         for param in event.get("data", []):
             await self.get_order(param)
 
     async def cancel_orders(self, event: Event):
-        async with lock:
-            for param in event.get("data", []):
-                await self.cancel_order(param)
+        for param in event.get("data", []):
+            await self.cancel_order(param)
 
     async def cancel_all_orders(self):
-        async with lock:
-            try:
-                await self.exchange.cancel_all_orders(self.tickers)
+        try:
+            async with self.sem:
+                exchange = await self.get_exchange()
+                await exchange.cancel_all_orders(self.tickers)
 
-            except Exception as e:
-                logger.exception(e)
+        except Exception as e:
+            logger.exception(e)
 
     async def create_order(self, param: dict, event_id: str):
         try:
-            order = await self.exchange.create_order(param)
+            if self.sem.locked():
+                logger.info("Need more tokens!")
+
+            async with self.sem:
+                exchange = await self.get_exchange()
+                order = await exchange.create_order(param)
 
             order["client_order_id"] = param["client_order_id"]
             self.event_id_by_client_order_id.set(order["client_order_id"], event_id)
@@ -148,6 +180,10 @@ class Gate:
     async def cancel_order(self, param: dict):
         order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
         symbol = param["symbol"]
+
+        async with self.sem:
+            exchange = await self.get_exchange()
+            await exchange.cancel_order({"id": order_id, "symbol": symbol})
 
         try:
             await self.exchange.cancel_order({"id": order_id, "symbol": symbol})
@@ -204,10 +240,9 @@ class Gate:
             order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
             symbol = param["symbol"]
 
-            async with lock:
-                order = await self.exchange.fetch_order(
-                    {"id": order_id, "symbol": symbol}
-                )
+            async with self.sem:
+                exchange = await self.get_exchange()
+                order = await exchange.fetch_order({"id": order_id, "symbol": symbol})
 
             order["client_order_id"] = param["client_order_id"]
 
@@ -238,8 +273,9 @@ class Gate:
             assets = self.assets
 
         try:
-            async with lock:
-                balance = await self.exchange.fetch_partial_balance(assets)
+            async with self.sem:
+                exchange = await self.get_exchange()
+                balance = await exchange.fetch_partial_balance(assets)
 
             event: Event = {
                 "event_id": event["event_id"],
@@ -294,8 +330,9 @@ class Gate:
     async def watch_balance(self):
         while True:
             try:
-                async with lock:
-                    balance = await self.exchange.fetch_partial_balance(self.assets)
+                async with self.sem:
+                    exchange = await self.get_exchange()
+                    balance = await exchange.fetch_partial_balance(self.assets)
 
                 event: Event = {
                     "event_id": str(uuid.uuid4()),
@@ -325,8 +362,9 @@ class Gate:
                 try:
                     order_id = self.order_id_by_client_order_id.get(client_order_id)
 
-                    async with lock:
-                        order = await self.exchange.fetch_order(
+                    async with self.sem:
+                        exchange = await self.get_exchange()
+                        order = await exchange.fetch_order(
                             {"id": order_id, "symbol": symbol}
                         )
 
@@ -358,6 +396,7 @@ class Gate:
                     }
                     self.transmitter.offer(log_event, Destination.CORE)
                     self.transmitter.offer(log_event, Destination.LOGS)
+                    self.open_orders.discard((client_order_id, symbol))
 
                 logger.info("Open orders: %s", len(self.open_orders))
                 await asyncio.sleep(self.orders_delay)
@@ -377,7 +416,6 @@ class Gate:
         self.transmitter.offer(event, Destination.LOGS)
 
     async def close(self):
-        await self.exchange.close()
         await self.exchange_pool.close()
         self.transmitter.close()
 
