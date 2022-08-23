@@ -46,6 +46,11 @@ class Gate:
         )
         self.sem = asyncio.Semaphore(len(config_parser.accounts))
 
+        # Событие, которое наступает после обработки команды ядра
+        # Когда событие очищено, шлюз не запрашивает периодические данные
+        self.no_priority_commands = asyncio.Event()
+        self.no_priority_commands.set()
+
         self.exchange_pool = ExchangePool(
             exchange_id,
             config_parser.public_config,
@@ -123,8 +128,12 @@ class Gate:
                 return self.get_balance(event)
 
     async def create_orders(self, event: Event):
-        for param in event.get("data", []):
-            await self.create_order(param, event.get("event_id"))
+        try:
+            self.no_priority_commands.clear()
+            for param in event.get("data", []):
+                await self.create_order(param, event.get("event_id"))
+        finally:
+            self.no_priority_commands.set()
 
     async def get_orders(self, event: Event):
         for param in event.get("data", []):
@@ -330,6 +339,8 @@ class Gate:
     async def watch_balance(self):
         while True:
             try:
+                await self.no_priority_commands.wait()
+
                 async with self.sem:
                     exchange = await self.get_exchange()
                     balance = await exchange.fetch_partial_balance(self.assets)
@@ -361,6 +372,8 @@ class Gate:
             for client_order_id, symbol in self.open_orders.copy():
                 try:
                     order_id = self.order_id_by_client_order_id.get(client_order_id)
+
+                    await self.no_priority_commands.wait()
 
                     async with self.sem:
                         exchange = await self.get_exchange()
