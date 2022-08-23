@@ -146,14 +146,46 @@ class Gate:
             self.transmitter.offer(log_event, Destination.LOGS)
 
     async def cancel_order(self, param: dict):
-        try:
-            order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
-            symbol = param["symbol"]
+        order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
+        symbol = param["symbol"]
 
+        try:
             await self.exchange.cancel_order({"id": order_id, "symbol": symbol})
 
-        except ccxt.base.errors.OrderNotFound:
-            pass
+        except ccxt.base.errors.OrderNotFound as e:
+            event: Event = {
+                "event_id": self.event_id_by_client_order_id.get(
+                    param["client_order_id"]
+                ),
+                "action": EventAction.ORDERS_UPDATE,
+                "data": [
+                    {
+                        "id": order_id,
+                        "client_order_id": param["client_order_id"],
+                        "timestamp": None,
+                        "status": "canceled",
+                        "symbol": symbol,
+                        "type": None,
+                        "side": None,
+                        "price": None,
+                        "amount": None,
+                        "filled": None,
+                    }
+                ],
+            }
+            self.transmitter.offer(event, Destination.CORE)
+            self.transmitter.offer(event, Destination.LOGS)
+
+            logger.exception(e)
+            log_event: Event = {
+                "event_id": str(uuid.uuid4()),
+                "event": EventType.ERROR,
+                "action": EventAction.CANCEL_ORDERS,
+                "message": str(e),
+                "data": [param],
+            }
+            self.transmitter.offer(log_event, Destination.CORE)
+            self.transmitter.offer(log_event, Destination.LOGS)
 
         except Exception as e:
             logger.exception(e)
