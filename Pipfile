@@ -5,19 +5,12 @@ name = "pypi"
 
 [packages]
 aeron = {git = "ssh://git@github.com/RoboTradeCode/aeron-python.git"}
-aiohttp = "*"
-ccxtpro = {subdirectory = "python", git = "ssh://git@github.com/kroitor/ccxt.pro.git"}
-pyyaml = "*"
-bidict = "*"
 aiofiles = "*"
-sentry-sdk = "*"
+aiohttp = "*"
+ccxtpro = {subdirectory = "python", git = "ssh://git@github.com/RoboTradeCode/ccxt.pro.git"}
 pymemcache = "*"
-more-itertools = "*"
-
-[dev-packages]
-pytest = "*"
-coverage = "*"
-pytest-asyncio = "*"
+pyyaml = "*"
+sentry-sdk = "*"
 
 [requires]
 python_version = "3.10"
