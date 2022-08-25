@@ -66,7 +66,6 @@ class Gate:
 
         self.balance_delay = config_parser.balance_delay
         self.orders_delay = config_parser.order_status_delay
-        self.orderbooks_delay = config_parser.order_book_delay
 
     async def run(self) -> NoReturn:
         tasks = self.get_periodical_tasks()
@@ -333,8 +332,6 @@ class Gate:
                 }
                 self.transmitter.offer(log_event, Destination.CORE)
                 self.transmitter.offer(log_event, Destination.LOGS)
-
-            await asyncio.sleep(self.orderbooks_delay)
 
     async def watch_balance(self):
         while True:
