@@ -22,6 +22,7 @@ class EventAction(str, Enum):
     BALANCE_UPDATE = "balance_update"
     ORDERS_UPDATE = "orders_update"
     PING = "ping"
+    METRICS = "metrics"
 
 
 class Destination(str, Enum):
