@@ -189,12 +189,10 @@ class Gate:
         order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
         symbol = param["symbol"]
 
-        async with self.sem:
-            exchange = await self.get_exchange()
-            await exchange.cancel_order({"id": order_id, "symbol": symbol})
-
         try:
-            await self.exchange.cancel_order({"id": order_id, "symbol": symbol})
+            async with self.sem:
+                exchange = await self.get_exchange()
+                await exchange.cancel_order({"id": order_id, "symbol": symbol})
 
         except ccxt.base.errors.OrderNotFound as e:
             event: Event = {
