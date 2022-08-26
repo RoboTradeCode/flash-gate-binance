@@ -30,6 +30,15 @@ jobs:
       with:
         python-version: "3.10"
 
+    - name: Install Aeron
+      run: |
+        git clone --branch 1.39.0 --depth 1 https://github.com/real-logic/aeron.git
+        mkdir --parents aeron/cppbuild/Debug
+        cd aeron/cppbuild/Debug
+        cmake -DCMAKE_BUILD_TYPE=Debug ../..
+        cmake --build . --clean-first --parallel 2
+        sudo cmake --install .
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
