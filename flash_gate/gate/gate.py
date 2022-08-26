@@ -420,7 +420,7 @@ class Gate:
 
     async def metrics(self) -> NoReturn:
         while True:
-            if self.orderbook_rps > 0:
+            if len(self.orderbook_latencies) > 1:
                 self.offer_metrics()
             await asyncio.sleep(1)
 
