@@ -51,7 +51,7 @@ jobs:
     - name: Lint with Black
       uses: psf/black@stable
       with:
-        src: "./"
+        src: "./flash_gate"
 
     - name: Test with pytest
       run: pytest
