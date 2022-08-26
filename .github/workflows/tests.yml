@@ -50,6 +50,8 @@ jobs:
 
     - name: Lint with Black
       uses: psf/black@stable
+      with:
+        src: "./"
 
     - name: Test with pytest
       run: pytest
