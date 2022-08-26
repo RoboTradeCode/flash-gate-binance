@@ -48,7 +48,6 @@ class Gate:
             if config_parser.accounts is not None
             else None
         )
-        self.sem = asyncio.Semaphore(len(config_parser.accounts))
 
         # Событие, которое наступает после обработки команды ядра
         # Когда событие очищено, шлюз не запрашивает периодические данные
@@ -152,21 +151,16 @@ class Gate:
 
     async def cancel_all_orders(self):
         try:
-            async with self.sem:
-                exchange = await self.get_exchange()
-                await exchange.cancel_all_orders(self.tickers)
+            exchange = await self.get_exchange()
+            await exchange.cancel_all_orders(self.tickers)
 
         except Exception as e:
             logger.exception(e)
 
     async def create_order(self, param: dict, event_id: str):
         try:
-            if self.sem.locked():
-                logger.info("Need more tokens!")
-
-            async with self.sem:
-                exchange = await self.get_exchange()
-                order = await exchange.create_order(param)
+            exchange = await self.get_exchange()
+            order = await exchange.create_order(param)
 
             order["client_order_id"] = param["client_order_id"]
             self.event_id_by_client_order_id.set(order["client_order_id"], event_id)
@@ -198,9 +192,8 @@ class Gate:
         symbol = param["symbol"]
 
         try:
-            async with self.sem:
-                exchange = await self.get_exchange()
-                await exchange.cancel_order({"id": order_id, "symbol": symbol})
+            exchange = await self.get_exchange()
+            await exchange.cancel_order({"id": order_id, "symbol": symbol})
 
         except ccxt.base.errors.OrderNotFound as e:
             event: Event = {
@@ -254,9 +247,8 @@ class Gate:
             order_id = self.order_id_by_client_order_id.get(param["client_order_id"])
             symbol = param["symbol"]
 
-            async with self.sem:
-                exchange = await self.get_exchange()
-                order = await exchange.fetch_order({"id": order_id, "symbol": symbol})
+            exchange = await self.get_exchange()
+            order = await exchange.fetch_order({"id": order_id, "symbol": symbol})
 
             order["client_order_id"] = param["client_order_id"]
 
@@ -287,9 +279,8 @@ class Gate:
             assets = self.assets
 
         try:
-            async with self.sem:
-                exchange = await self.get_exchange()
-                balance = await exchange.fetch_partial_balance(assets)
+            exchange = await self.get_exchange()
+            balance = await exchange.fetch_partial_balance(assets)
 
             event: Event = {
                 "event_id": event["event_id"],
@@ -355,9 +346,8 @@ class Gate:
             try:
                 await self.no_priority_commands.wait()
 
-                async with self.sem:
-                    exchange = await self.get_exchange()
-                    balance = await exchange.fetch_partial_balance(self.assets)
+                exchange = await self.get_exchange()
+                balance = await exchange.fetch_partial_balance(self.assets)
 
                 event: Event = {
                     "event_id": str(uuid.uuid4()),
@@ -389,11 +379,10 @@ class Gate:
 
                     await self.no_priority_commands.wait()
 
-                    async with self.sem:
-                        exchange = await self.get_exchange()
-                        order = await exchange.fetch_order(
-                            {"id": order_id, "symbol": symbol}
-                        )
+                    exchange = await self.get_exchange()
+                    order = await exchange.fetch_order(
+                        {"id": order_id, "symbol": symbol}
+                    )
 
                     order["client_order_id"] = client_order_id
 
