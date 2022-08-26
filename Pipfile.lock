@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "bf41bf42108a8251144a9a75b6576e752cfdee343d6090163c062017ce065482"
+            "sha256": "d513df608c8b0a26577dfdbd2bcea62ebb2d74f6fbd62009c3328b19df1196ec"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -139,14 +139,14 @@
         },
         "ccxt": {
             "hashes": [
-                "sha256:6f15e237d6c249145b6ec11224591a586e7808a77c7ea388c5fe23c6efe179e4",
-                "sha256:f158967afbfd272d6c4fd00aa3a7f25339c2a6174ae8f426ceb5d179f7a09d86"
+                "sha256:04049eb14cb7e3b75615f3731517f56e62caae15f9de2c1113e930d49c94c495",
+                "sha256:2c83176f9edb435a5b209b1f720daeb02ccb8e9ce3ec830aab4a299680a547ac"
             ],
-            "version": "==1.92.71"
+            "version": "==1.92.72"
         },
         "ccxtpro": {
             "git": "ssh://git@github.com/RoboTradeCode/ccxt.pro.git",
-            "ref": "6b0db241594efed2988ee2677941bd5f9a264ef5",
+            "ref": "8708ecc91015a1c18d21503e919713e696915006",
             "subdirectory": "python"
         },
         "certifi": {
@@ -515,14 +515,6 @@
             ],
             "markers": "python_version >= '3.7' and python_version < '4'",
             "version": "==2.28.1"
-        },
-        "sentry-sdk": {
-            "hashes": [
-                "sha256:2d7ec7bc88ebbdf2c4b6b2650b3257893d386325a96c9b723adcd31033469b63",
-                "sha256:b4b41f90951ed83e7b4c176eef021b19ecba39da5b73aca106c97a9b7e279a90"
-            ],
-            "index": "pypi",
-            "version": "==1.9.5"
         },
         "setuptools": {
             "hashes": [

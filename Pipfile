@@ -10,7 +10,6 @@ aiohttp = "*"
 ccxtpro = {subdirectory = "python", git = "ssh://git@github.com/RoboTradeCode/ccxt.pro.git"}
 pymemcache = "*"
 pyyaml = "*"
-sentry-sdk = "*"
 
 [requires]
 python_version = "3.10"
