@@ -17,10 +17,10 @@ def latency_percentile(data: list) -> LatencyPercentile:
     """
     quantiles = statistics.quantiles(data, n=10000, method="inclusive")
     percentiles = {
-        "50": percentile(quantiles, "50"),
-        "90": percentile(quantiles, "90"),
-        "99": percentile(quantiles, "99"),
-        "99.99": percentile(quantiles, "99.99"),
+        "50": int(percentile(quantiles, "50")),
+        "90": int(percentile(quantiles, "90")),
+        "99": int(percentile(quantiles, "99")),
+        "99.99": int(percentile(quantiles, "99.99")),
     }
     return percentiles
 
