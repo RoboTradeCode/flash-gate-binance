@@ -54,4 +54,4 @@ jobs:
         src: "./flash_gate"
 
     - name: Test with pytest
-      run: pytest
+      run: pipenv run pytest
