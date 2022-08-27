@@ -29,6 +29,7 @@ class ConfigParser:
             "secret": gate_config["exchange"]["credentials"]["secret_key"],
             "password": gate_config["exchange"]["credentials"]["password"],
             "enableRateLimit": self._rate_limits["enable_ccxt_rate_limiter"],
+            "timeout": gate_config["exchange"]["timeout_ms"],
         }
         return exchange_config
 
