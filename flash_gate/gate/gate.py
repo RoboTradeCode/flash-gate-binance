@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import uuid
+from asyncio import ALL_COMPLETED
 from time import monotonic_ns
 from typing import NoReturn, Coroutine
 import ccxt.base.errors
@@ -49,11 +50,6 @@ class Gate:
             else None
         )
 
-        # Событие, которое наступает после обработки команды ядра
-        # Когда событие очищено, шлюз не запрашивает периодические данные
-        self.no_priority_commands = asyncio.Event()
-        self.no_priority_commands.set()
-
         self.exchange_pool = ExchangePool(
             exchange_id,
             config_parser.public_config,
@@ -73,6 +69,13 @@ class Gate:
         self.orderbook_rps = 0
         self.private_api_total_rps = 0
 
+        # Strong references to tasks
+        self.background_tasks = set()
+
+        # References to tasks that are considered priority. Periodic data
+        # will not be requested if the list of priority tasks is not empty
+        self.priority_tasks = set()
+
     async def run(self) -> NoReturn:
         tasks = self.get_periodical_tasks()
         await asyncio.gather(*tasks)
@@ -89,8 +92,7 @@ class Gate:
     def handler(self, message: str):
         logger.debug("Message: %s", message)
         event = self.deserialize_message(message)
-        task = self.get_task(event)
-        asyncio.create_task(task)
+        self.create_task(event)
 
     async def get_exchange(self):
         """
@@ -117,29 +119,40 @@ class Gate:
         event["node"] = EventNode.GATE
         self.transmitter.offer(event, Destination.LOGS)
 
-    def get_task(self, event: Event) -> Coroutine:
-        if not isinstance(event, dict):
-            return asyncio.sleep(0)
+    def create_task(self, event: Event):
+        priority_task = False
 
         match event.get("action"):
             case EventAction.CREATE_ORDERS:
-                return self.create_orders(event)
+                priority_task = True
+                action = self.create_orders(event)
             case EventAction.CANCEL_ORDERS:
-                return self.cancel_orders(event)
+                priority_task = True
+                action = self.cancel_orders(event)
             case EventAction.CANCEL_ALL_ORDERS:
-                return self.cancel_all_orders()
+                priority_task = True
+                action = self.cancel_all_orders()
             case EventAction.GET_ORDERS:
-                return self.get_orders(event)
+                action = self.get_orders(event)
             case EventAction.GET_BALANCE:
-                return self.get_balance(event)
+                action = self.get_balance(event)
+            case _:
+                logger.error("Unsupported action: %s", event.get("action"))
+                action = asyncio.create_task(asyncio.sleep(0))
+
+        task = asyncio.create_task(action)
+
+        # Save reference to result, to avoid task disappearing
+        self.background_tasks.add(task)
+        task.add_done_callback(self.background_tasks.discard)
+
+        if priority_task:
+            self.priority_tasks.add(task)
+            task.add_done_callback(self.priority_tasks.discard)
 
     async def create_orders(self, event: Event):
-        try:
-            self.no_priority_commands.clear()
-            for param in event.get("data", []):
-                await self.create_order(param, event.get("event_id"))
-        finally:
-            self.no_priority_commands.set()
+        for param in event.get("data", []):
+            await self.create_order(param, event.get("event_id"))
 
     async def get_orders(self, event: Event):
         for param in event.get("data", []):
@@ -359,7 +372,8 @@ class Gate:
     async def watch_balance(self):
         while True:
             try:
-                await self.no_priority_commands.wait()
+                # Wait for priority commands to complete
+                await asyncio.wait(self.priority_tasks, return_when=ALL_COMPLETED)
 
                 exchange = await self.get_exchange()
                 balance = await exchange.fetch_partial_balance(self.assets)
@@ -392,7 +406,8 @@ class Gate:
                 try:
                     order_id = self.order_id_by_client_order_id.get(client_order_id)
 
-                    await self.no_priority_commands.wait()
+                    # Wait for priority commands to complete
+                    await asyncio.wait(self.priority_tasks, return_when=ALL_COMPLETED)
 
                     exchange = await self.get_exchange()
                     order = await exchange.fetch_order(
