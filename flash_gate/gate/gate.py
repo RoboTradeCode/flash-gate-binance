@@ -82,10 +82,10 @@ class Gate:
 
     def get_periodical_tasks(self) -> list[Coroutine]:
         return [
-            self.transmitter.run(),
+            # self.transmitter.run(),
             self.watch_orderbooks(),
-            self.watch_balance(),
-            self.watch_orders(),
+            # self.watch_balance(),
+            # self.watch_orders(),
             self.metrics(),
         ]
 
@@ -333,10 +333,13 @@ class Gate:
     async def watch_orderbooks(self):
         while True:
             try:
-                exchange = await self.exchange_pool.acquire()
 
                 start = monotonic_ns()
-                orderbooks = await exchange.fetch_order_books(self.tickers, 10)
+                coroutines = []
+                for symbol in self.tickers:
+                    exchange = await self.exchange_pool.acquire()
+                    coroutines.append(exchange.fetch_order_book(symbol, 10))
+                orderbooks = await asyncio.gather(*coroutines)
                 end = monotonic_ns()
 
                 self.save_orderbook_metric(start, end)
