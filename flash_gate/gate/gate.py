@@ -370,7 +370,7 @@ class Gate:
         """
         latency = ns_to_us(end - start)
         self.orderbook_latencies.append(latency)
-        self.orderbook_rps += 1
+        self.orderbook_rps += 1 / len(self.tickers)
 
     async def watch_balance(self):
         while True:
