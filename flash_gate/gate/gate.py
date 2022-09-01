@@ -353,6 +353,7 @@ class Gate:
                     self.transmitter.offer(event, Destination.ORDER_BOOK)
 
             except Exception as e:
+                logger.error(e, exc_info=True)
                 message = self.describe_exception(e)
                 log_event: Event = {
                     "event_id": str(uuid.uuid4()),
