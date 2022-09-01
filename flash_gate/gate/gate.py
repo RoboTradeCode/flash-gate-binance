@@ -365,6 +365,10 @@ class Gate:
                 self.transmitter.offer(log_event, Destination.CORE)
                 self.transmitter.offer(log_event, Destination.LOGS)
 
+                if isinstance(e, ccxt.errors.DDoSProtection) or isinstance(e, ccxt.errors.RateLimitExceeded):
+                    logger.critical('Insufficient ip addresses. Gate has been stop. Restart the gate to continue.')
+                    input()
+
     def save_orderbook_metric(self, start: int, end: int) -> None:
         """
         Сохранить целевые метрики для ордербука
