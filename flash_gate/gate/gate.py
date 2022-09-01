@@ -376,7 +376,8 @@ class Gate:
         while True:
             try:
                 # Wait for priority commands to complete
-                await asyncio.wait(self.priority_tasks, return_when=ALL_COMPLETED)
+                if self.priority_tasks:
+                    await asyncio.wait(self.priority_tasks, return_when=ALL_COMPLETED)
 
                 exchange = await self.get_exchange()
                 balance = await exchange.fetch_partial_balance(self.assets)
