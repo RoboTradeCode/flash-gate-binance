@@ -366,8 +366,7 @@ class Gate:
                 self.transmitter.offer(log_event, Destination.LOGS)
 
                 if isinstance(e, ccxt.errors.DDoSProtection) or isinstance(e, ccxt.errors.RateLimitExceeded):
-                    logger.critical('Insufficient ip addresses. Gate has been stop. Restart the gate to continue.')
-                    await asyncio.sleep(1_000_000)
+                    logger.error('Insufficient ip addresses.')
 
     def save_orderbook_metric(self, start: int, end: int) -> None:
         """
