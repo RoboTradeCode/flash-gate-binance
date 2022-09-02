@@ -37,8 +37,6 @@ class Gate:
 
         self._exchange = (
             CcxtExchange(exchange_id, exchange_config)
-            if config_parser.accounts is None
-            else None
         )
         self._private_exchange_pool = (
             PrivateExchangePool(
@@ -84,8 +82,8 @@ class Gate:
         return [
             # self.transmitter.run(),
             self.watch_orderbooks(),
-            # self.watch_balance(),
-            # self.watch_orders(),
+            self.watch_balance(),
+            self.watch_orders(),
             self.metrics(),
         ]
 
@@ -383,8 +381,7 @@ class Gate:
                 if self.priority_tasks:
                     await asyncio.wait(self.priority_tasks, return_when=ALL_COMPLETED)
 
-                exchange = await self.get_exchange()
-                balance = await exchange.fetch_partial_balance(self.assets)
+                balance = await self._exchange.watch_partial_balance(self.assets)
 
                 event: Event = {
                     "event_id": str(uuid.uuid4()),
@@ -406,27 +403,16 @@ class Gate:
                 self.transmitter.offer(log_event, Destination.CORE)
                 self.transmitter.offer(log_event, Destination.LOGS)
 
-            await asyncio.sleep(self.balance_delay)
 
     async def watch_orders(self):
         while True:
-            for client_order_id, symbol in self.open_orders.copy():
-                try:
-                    order_id = self.order_id_by_client_order_id.get(client_order_id)
-
-                    # Wait for priority commands to complete
+            try:
+                # Wait for priority commands to complete
+                if self.priority_tasks:
                     await asyncio.wait(self.priority_tasks, return_when=ALL_COMPLETED)
 
-                    exchange = await self.get_exchange()
-                    order = await exchange.fetch_order(
-                        {"id": order_id, "symbol": symbol}
-                    )
-
-                    order["client_order_id"] = client_order_id
-
-                    if order["status"] != "open":
-                        self.open_orders.discard((client_order_id, symbol))
-
+                orders = await self._exchange.watch_orders()
+                for order in orders:
                     event: Event = {
                         "event_id": self.event_id_by_client_order_id.get(
                             order["client_order_id"]
@@ -437,24 +423,17 @@ class Gate:
                     self.transmitter.offer(event, Destination.CORE)
                     self.transmitter.offer(event, Destination.LOGS)
 
-                except Exception as e:
-                    message = self.describe_exception(e)
-                    log_event: Event = {
-                        "event_id": str(uuid.uuid4()),
-                        "event": EventType.ERROR,
-                        "action": EventAction.ORDERS_UPDATE,
-                        "message": message,
-                        "data": [
-                            {"client_order_id": client_order_id, "symbol": symbol}
-                        ],
-                    }
-                    self.transmitter.offer(log_event, Destination.CORE)
-                    self.transmitter.offer(log_event, Destination.LOGS)
-                    self.open_orders.discard((client_order_id, symbol))
-
-                logger.info("Open orders: %s", len(self.open_orders))
-                await asyncio.sleep(self.orders_delay)
-            await asyncio.sleep(0)
+            except Exception as e:
+                message = self.describe_exception(e)
+                log_event: Event = {
+                    "event_id": str(uuid.uuid4()),
+                    "event": EventType.ERROR,
+                    "action": EventAction.ORDERS_UPDATE,
+                    "message": message,
+                    "data": None,
+                }
+                self.transmitter.offer(log_event, Destination.CORE)
+                self.transmitter.offer(log_event, Destination.LOGS)
 
     async def metrics(self) -> NoReturn:
         while True:
