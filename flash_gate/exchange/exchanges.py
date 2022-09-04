@@ -111,7 +111,6 @@ class CcxtExchange(Exchange):
     def __init__(self, exchange_id: str, config: dict):
         self.logger = logging.getLogger(__name__)
         self.exchange: ccxtpro.Exchange = getattr(ccxtpro, exchange_id)(config)
-        self.exchange.nonce = self.nonce
 
     @staticmethod
     def nonce():
