@@ -81,7 +81,7 @@ class Gate:
 
     def get_periodical_tasks(self) -> list[Coroutine]:
         return [
-            # self.transmitter.run(),
+            self.transmitter.run(),
             self.watch_orderbooks(),
             self.watch_balance(),
             self.watch_orders(),
