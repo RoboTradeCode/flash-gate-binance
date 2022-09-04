@@ -33,6 +33,7 @@ class Gate:
 
         self.event_id_by_client_order_id = Memcached(key_prefix="event_id")
         self.order_id_by_client_order_id = Memcached(key_prefix="order_id")
+        self.client_order_id_by_order_id = Memcached(key_prefix="client_order_id")
         self.transmitter = AeronTransmitter(self.handler, config)
 
         self._exchange = (
@@ -174,6 +175,7 @@ class Gate:
             order = await exchange.create_order(param)
 
             order["client_order_id"] = param["client_order_id"]
+            self.client_order_id_by_order_id.set(order["id"], order["client_order_id"])
             self.event_id_by_client_order_id.set(order["client_order_id"], event_id)
             self.order_id_by_client_order_id.set(order["client_order_id"], order["id"])
             self.open_orders.add((order["client_order_id"], order["symbol"]))
@@ -413,6 +415,7 @@ class Gate:
 
                 orders = await self._exchange.watch_orders()
                 for order in orders:
+                    order["client_order_id"] = self.client_order_id_by_order_id.get(order["id"])
                     event: Event = {
                         "event_id": self.event_id_by_client_order_id.get(
                             order["client_order_id"]
