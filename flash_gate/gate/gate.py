@@ -39,6 +39,7 @@ class Gate:
         self._exchange = (
             CcxtExchange(exchange_id, exchange_config)
         )
+        self._exchange.exchange.set_sandbox_mode(config_parser.sandbox_mode)
         self._private_exchange_pool = (
             PrivateExchangePool(
                 exchange_id=exchange_id,
