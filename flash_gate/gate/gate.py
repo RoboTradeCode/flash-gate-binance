@@ -137,7 +137,7 @@ class Gate:
                 action = self.get_balance(event)
             case _:
                 logger.error("Unsupported action: %s", event.get("action"))
-                action = asyncio.create_task(asyncio.sleep(0))
+                action = asyncio.sleep(0)
 
         task = asyncio.create_task(action)
 
