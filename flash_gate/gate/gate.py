@@ -92,7 +92,8 @@ class Gate:
     def handler(self, message: str):
         logger.debug("Message: %s", message)
         event = self.deserialize_message(message)
-        self.create_task(event)
+        if event is not None:
+            self.create_task(event)
 
     async def get_exchange(self):
         """
@@ -106,7 +107,7 @@ class Gate:
             return await self._private_exchange_pool.acquire()
         return self._exchange
 
-    def deserialize_message(self, message: str) -> Event:
+    def deserialize_message(self, message: str) -> Event | None:
         try:
             event = json.loads(message)
             self.log(event)
