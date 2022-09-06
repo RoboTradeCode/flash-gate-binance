@@ -246,7 +246,7 @@ class CcxtExchange(Exchange):
             params["type"],
             params["side"],
             params["amount"],
-            params["price"] if params["type"] != "market" else 0,
+            params["price"],
         )
         order = self._format(raw_order, StructureType.ORDER)
         self.logger.debug("Order has been successfully created: %s", order)
