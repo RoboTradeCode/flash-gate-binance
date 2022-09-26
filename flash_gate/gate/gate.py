@@ -76,6 +76,9 @@ class Gate:
         # will not be requested if the list of priority tasks is not empty
         self.priority_tasks = set()
 
+        # Задержка при получении ордербуков, для того, чтобы не превышать rate limit биржи
+        self.orderbook_delay = config_parser.orderbook_delay
+
     async def run(self) -> NoReturn:
         tasks = self.get_periodical_tasks()
         await asyncio.gather(*tasks)
@@ -335,6 +338,7 @@ class Gate:
     async def watch_orderbooks(self):
         while True:
             try:
+                await asyncio.sleep(self.orderbook_delay)
 
                 start = monotonic_ns()
                 coroutines = []
